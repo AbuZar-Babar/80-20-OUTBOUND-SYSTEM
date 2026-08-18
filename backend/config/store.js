@@ -1,24 +1,24 @@
 const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
+const { isMongoConnected } = require('./db');
 
+// Mongoose models (used when MongoDB is connected)
+const User = require('../models/User');
+const Call = require('../models/Call');
+const Message = require('../models/Message');
+const Contact = require('../models/Contact');
+
+// Zero-DB local persistence
 const DATA_DIR = path.join(__dirname, '../../data');
 const STORE_FILE = path.join(DATA_DIR, 'store.json');
 
-// Default initial state
-let store = {
-  users: [],
-  calls: [],
-  messages: [],
-  contacts: []
-};
+let store = { users: [], calls: [], messages: [], contacts: [] };
 
-// Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// Load store from disk if exists
 const loadStore = () => {
   try {
     if (fs.existsSync(STORE_FILE)) {
@@ -28,36 +28,43 @@ const loadStore = () => {
       if (!store.calls) store.calls = [];
       if (!store.messages) store.messages = [];
       if (!store.contacts) store.contacts = [];
-      console.log(`[Zero-DB Store] Loaded persistence file (${store.users.length} users, ${store.contacts.length} contacts)`);
+      console.log(`[Zero-DB] Loaded: ${store.users.length} users, ${store.contacts.length} contacts`);
     } else {
       saveStore();
     }
   } catch (err) {
-    console.error('[Zero-DB Store] Load error, initializing fresh memory store:', err.message);
+    console.error('[Zero-DB] Load error:', err.message);
   }
 };
 
-// Save store to disk synchronously
 const saveStore = () => {
   try {
     fs.writeFileSync(STORE_FILE, JSON.stringify(store, null, 2), 'utf8');
   } catch (err) {
-    console.error('[Zero-DB Store] Save error:', err.message);
+    console.error('[Zero-DB] Save error:', err.message);
   }
 };
 
-// Helper generator for unique IDs
 const generateId = () => Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
 
 // --- User Operations ---
 const UserStore = {
   async findOne({ email }) {
+    if (isMongoConnected()) {
+      return await User.findOne({ email: email.toLowerCase() }).lean();
+    }
     if (!email) return null;
     const user = store.users.find(u => u.email === email.toLowerCase());
     return user ? { ...user } : null;
   },
 
   async findById(id) {
+    if (isMongoConnected()) {
+      const user = await User.findById(id).lean();
+      if (!user) return null;
+      const { password, ...rest } = user;
+      return rest;
+    }
     const user = store.users.find(u => u._id === id);
     if (!user) return null;
     const { password, ...userWithoutPassword } = user;
@@ -65,9 +72,14 @@ const UserStore = {
   },
 
   async create({ name, email, password }) {
+    if (isMongoConnected()) {
+      const user = await User.create({ name, email: email.toLowerCase(), password });
+      const { password: _, ...rest } = user.toObject();
+      return rest;
+    }
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
-    
     const newUser = {
       _id: generateId(),
       name: name.trim(),
@@ -75,10 +87,8 @@ const UserStore = {
       password: hashedPassword,
       createdAt: new Date().toISOString()
     };
-
     store.users.push(newUser);
     saveStore();
-
     const { password: _, ...userWithoutPassword } = newUser;
     return userWithoutPassword;
   },
@@ -91,6 +101,10 @@ const UserStore = {
 // --- Call Operations ---
 const CallStore = {
   async create({ userId, callSid, from, to, status, startTime }) {
+    if (isMongoConnected()) {
+      return await Call.create({ userId, callSid, from, to, status: status || 'queued', startTime });
+    }
+
     const newCall = {
       _id: generateId(),
       userId: userId.toString(),
@@ -109,15 +123,21 @@ const CallStore = {
   },
 
   async findByUserId(userId) {
+    if (isMongoConnected()) {
+      return await Call.find({ userId }).sort({ createdAt: -1 }).lean();
+    }
     return store.calls
       .filter(c => c.userId === userId.toString())
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   },
 
   async findOneAndUpdate({ callSid }, updateData) {
+    if (isMongoConnected()) {
+      return await Call.findOneAndUpdate({ callSid }, updateData, { new: true }).lean();
+    }
+
     const callIndex = store.calls.findIndex(c => c.callSid === callSid);
     if (callIndex === -1) return null;
-
     store.calls[callIndex] = {
       ...store.calls[callIndex],
       ...updateData,
@@ -131,6 +151,10 @@ const CallStore = {
 // --- Message Operations ---
 const MessageStore = {
   async create({ userId, messageSid, from, to, body, status }) {
+    if (isMongoConnected()) {
+      return await Message.create({ userId, messageSid, from, to, body, status: status || 'queued' });
+    }
+
     const newMessage = {
       _id: generateId(),
       userId: userId.toString(),
@@ -147,6 +171,9 @@ const MessageStore = {
   },
 
   async findByUserId(userId) {
+    if (isMongoConnected()) {
+      return await Message.find({ userId }).sort({ createdAt: -1 }).lean();
+    }
     return store.messages
       .filter(m => m.userId === userId.toString())
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -156,6 +183,10 @@ const MessageStore = {
 // --- Contact Operations ---
 const ContactStore = {
   async create({ userId, name, phone }) {
+    if (isMongoConnected()) {
+      return await Contact.create({ userId, name: name.trim(), phone: phone.trim() });
+    }
+
     const newContact = {
       _id: generateId(),
       userId: userId.toString(),
@@ -170,28 +201,44 @@ const ContactStore = {
   },
 
   async findByUserId(userId) {
+    if (isMongoConnected()) {
+      return await Contact.find({ userId }).sort({ name: 1 }).lean();
+    }
     return store.contacts
       .filter(c => c.userId === userId.toString())
       .sort((a, b) => a.name.localeCompare(b.name));
   },
 
   async findOne({ _id, userId }) {
+    if (isMongoConnected()) {
+      return await Contact.findOne({ _id, userId }).lean();
+    }
     return store.contacts.find(c => c._id === _id && c.userId === userId.toString()) || null;
   },
 
   async update(_id, userId, { name, phone }) {
+    if (isMongoConnected()) {
+      const update = {};
+      if (name) update.name = name.trim();
+      if (phone) update.phone = phone.trim();
+      return await Contact.findOneAndUpdate({ _id, userId }, update, { new: true }).lean();
+    }
+
     const contactIndex = store.contacts.findIndex(c => c._id === _id && c.userId === userId.toString());
     if (contactIndex === -1) return null;
-
     if (name) store.contacts[contactIndex].name = name.trim();
     if (phone) store.contacts[contactIndex].phone = phone.trim();
     store.contacts[contactIndex].updatedAt = new Date().toISOString();
-
     saveStore();
     return store.contacts[contactIndex];
   },
 
   async delete(_id, userId) {
+    if (isMongoConnected()) {
+      const result = await Contact.deleteOne({ _id, userId });
+      return result.deletedCount > 0;
+    }
+
     const initialLength = store.contacts.length;
     store.contacts = store.contacts.filter(c => !(c._id === _id && c.userId === userId.toString()));
     const deleted = store.contacts.length < initialLength;
@@ -200,12 +247,7 @@ const ContactStore = {
   }
 };
 
-// Initialize load
+// Initialize Zero-DB on load
 loadStore();
 
-module.exports = {
-  UserStore,
-  CallStore,
-  MessageStore,
-  ContactStore
-};
+module.exports = { UserStore, CallStore, MessageStore, ContactStore };
