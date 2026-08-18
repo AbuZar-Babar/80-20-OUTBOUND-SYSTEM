@@ -105,11 +105,19 @@ const handleTwiml = async (req, res) => {
 // @access  Public (Twilio Webhook)
 const handleStatusWebhook = async (req, res) => {
   try {
-    const { CallSid, CallStatus, CallDuration } = req.body;
+    const { CallSid, CallStatus, CallDuration, RecordingSid, RecordingUrl, RecordingDuration, RecordingStatus } = req.body;
 
-    console.log(`[Twilio Webhook] Call Status update - SID: ${CallSid}, Status: ${CallStatus}, Duration: ${CallDuration}s`);
+    if (RecordingSid && RecordingStatus === 'completed') {
+      console.log(`[Twilio Webhook] Recording completed - SID: ${RecordingSid}, Call SID: ${CallSid}`);
+      await CallStore.findOneAndUpdate({ callSid: CallSid }, {
+        recordingUrl: RecordingUrl,
+        recordingSid: RecordingSid,
+        recordingDuration: parseInt(RecordingDuration, 10) || 0
+      });
+    }
 
-    if (CallSid) {
+    if (CallSid && CallStatus) {
+      console.log(`[Twilio Webhook] Call Status update - SID: ${CallSid}, Status: ${CallStatus}, Duration: ${CallDuration}s`);
       const updateData = { status: CallStatus };
 
       if (CallDuration) {

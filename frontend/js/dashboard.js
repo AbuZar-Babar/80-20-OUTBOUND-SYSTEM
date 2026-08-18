@@ -249,7 +249,7 @@ async function fetchCallHistory() {
     if (!tableBody) return;
 
     if (calls.length === 0) {
-      tableBody.innerHTML = `<tr><td colspan="4" class="empty-placeholder">No call activity recorded yet.</td></tr>`;
+      tableBody.innerHTML = `<tr><td colspan="5" class="empty-placeholder">No call activity recorded yet.</td></tr>`;
       return;
     }
 
@@ -267,6 +267,7 @@ async function fetchCallHistory() {
           <td><strong>${call.to}</strong></td>
           <td><span class="badge ${badgeClass}">${call.status}</span></td>
           <td>${durationFormatted}</td>
+          <td>${call.recordingUrl ? `<button class="btn btn-sm btn-outline" onclick="playRecording('${call.recordingUrl}.mp3')">Play</button>` : '<span style="color: var(--text-muted); font-size: 0.8rem;">—</span>'}</td>
           <td style="color: var(--text-muted); font-size: 0.8rem;">${dateFormatted}</td>
         </tr>
       `;
@@ -455,4 +456,12 @@ function escapeHtml(str) {
   return str.replace(/[&<>'"]/g, 
     tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
   );
+}
+
+function playRecording(url) {
+  const audio = new Audio(url);
+  audio.play().catch(err => {
+    showToast('Could not play recording. It may still be processing.', 'error');
+  });
+  showToast('Playing recording...', 'info');
 }

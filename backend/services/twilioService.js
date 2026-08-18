@@ -33,7 +33,10 @@ const makeOutboundCall = async (to, twimlUrl, statusUrl) => {
     to: to,
     from: fromNumber,
     statusCallback: statusUrl,
-    statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed']
+    statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
+    record: true,
+    recordingStatusCallback: statusUrl,
+    recordingStatusCallbackEvent: ['completed', 'absent']
   });
 
   return {

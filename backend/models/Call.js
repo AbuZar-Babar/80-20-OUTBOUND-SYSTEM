@@ -35,6 +35,18 @@ const callSchema = new mongoose.Schema({
   endTime: {
     type: Date
   },
+  recordingUrl: {
+    type: String,
+    default: null
+  },
+  recordingSid: {
+    type: String,
+    default: null
+  },
+  recordingDuration: {
+    type: Number,
+    default: 0
+  },
   createdAt: {
     type: Date,
     default: Date.now

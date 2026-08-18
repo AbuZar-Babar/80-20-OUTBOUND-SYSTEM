@@ -115,6 +115,9 @@ const CallStore = {
       duration: 0,
       startTime: startTime ? new Date(startTime).toISOString() : new Date().toISOString(),
       endTime: null,
+      recordingUrl: null,
+      recordingSid: null,
+      recordingDuration: 0,
       createdAt: new Date().toISOString()
     };
     store.calls.unshift(newCall);
