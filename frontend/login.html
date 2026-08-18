@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Sign in or create an account for Web Calling & SMS Platform">
+  <title>Authentication - Caller App</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1.5rem;">
+
+  <div class="modal-box" style="width: 100%; max-width: 440px; box-shadow: var(--shadow-card); background: rgba(12, 17, 29, 0.85); backdrop-filter: blur(20px);">
+    <div style="text-align: center; margin-bottom: 2rem;">
+      <div style="width: 56px; height: 56px; border-radius: 16px; background: var(--grad-primary); display: flex; align-items: center; justify-content: center; font-size: 1.8rem; margin: 0 auto 1rem auto; box-shadow: var(--shadow-glow);">
+        📡
+      </div>
+      <h1 style="font-size: 1.75rem; margin-bottom: 0.3rem;">Caller App</h1>
+      <p style="color: var(--text-secondary); font-size: 0.9rem;">Enterprise Telecommunications Portal</p>
+    </div>
+
+    <!-- Auth Tabs -->
+    <div style="display: flex; background: rgba(7, 10, 18, 0.8); padding: 4px; border-radius: var(--radius-sm); margin-bottom: 1.5rem;">
+      <button id="tab-login" class="btn" style="flex: 1; padding: 0.6rem; background: var(--grad-primary); color: #fff; border-radius: calc(var(--radius-sm) - 2px);">Sign In</button>
+      <button id="tab-register" class="btn" style="flex: 1; padding: 0.6rem; background: transparent; color: var(--text-muted); border-radius: calc(var(--radius-sm) - 2px);">Register</button>
+    </div>
+
+    <!-- Login Form -->
+    <form id="form-login">
+      <div class="form-group">
+        <label class="form-label" for="login-email">Email Address</label>
+        <input type="email" id="login-email" class="input-control" placeholder="name@company.com" required autocomplete="email">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="login-password">Password</label>
+        <input type="password" id="login-password" class="input-control" placeholder="••••••••" required autocomplete="current-password">
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem; padding: 0.85rem;">
+        Sign In to Portal
+      </button>
+    </form>
+
+    <!-- Register Form -->
+    <form id="form-register" style="display: none;">
+      <div class="form-group">
+        <label class="form-label" for="register-name">Full Name</label>
+        <input type="text" id="register-name" class="input-control" placeholder="John Doe" required autocomplete="name">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="register-email">Email Address</label>
+        <input type="email" id="register-email" class="input-control" placeholder="name@company.com" required autocomplete="email">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="register-password">Password</label>
+        <input type="password" id="register-password" class="input-control" placeholder="Minimum 6 characters" minlength="6" required autocomplete="new-password">
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem; padding: 0.85rem;">
+        Create Account
+      </button>
+    </form>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+</body>
+</html>

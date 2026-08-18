@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Professional Telecommunications Dashboard for Web Calling & SMS">
+  <title>Caller App - Enterprise Dashboard</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div class="app-layout">
+    
+    <!-- Sidebar Navigation -->
+    <aside class="app-sidebar">
+      <div class="brand-header">
+        <div class="brand-logo">📡</div>
+        <div class="brand-info">
+          <h1>Caller App</h1>
+          <span>Telephony Hub</span>
+        </div>
+      </div>
+
+      <nav>
+        <ul class="nav-menu">
+          <li class="nav-item active" data-section="overview">
+            <span class="nav-item-icon">📊</span> Overview
+          </li>
+          <li class="nav-item" data-section="caller">
+            <span class="nav-item-icon">📞</span> Phone Caller
+          </li>
+          <li class="nav-item" data-section="sms">
+            <span class="nav-item-icon">💬</span> SMS Station
+          </li>
+          <li class="nav-item" data-section="contacts">
+            <span class="nav-item-icon">📇</span> Contacts Book
+          </li>
+          <li class="nav-item" data-section="logs">
+            <span class="nav-item-icon">📋</span> Activity Logs
+          </li>
+        </ul>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="user-avatar-circle" id="user-avatar-initial">U</div>
+          <div class="user-details">
+            <div class="user-name-text" id="user-name-display">Loading User...</div>
+            <div class="user-email-text" id="user-email-display">user@example.com</div>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="logoutUser()" title="Logout" style="padding: 0.35rem 0.6rem;">
+            🚪
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="app-main">
+      
+      <!-- Top Header -->
+      <header class="main-header">
+        <div class="header-title-area">
+          <h2>Telecommunications Console</h2>
+          <p>Real-time Voice Calling, SMS Messaging & Contact Management</p>
+        </div>
+
+        <div class="status-pill">
+          <span class="status-pulse-dot"></span>
+          <span>Twilio Service: Operational</span>
+        </div>
+      </header>
+
+      <!-- Quick Metrics Row -->
+      <section class="metrics-row">
+        <div class="metric-card">
+          <div class="metric-data">
+            <span>Total Calls Initiated</span>
+            <div class="metric-value" id="stat-total-calls">0</div>
+          </div>
+          <div class="metric-icon icon-indigo">📞</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-data">
+            <span>Sent Messages</span>
+            <div class="metric-value" id="stat-total-sms">0</div>
+          </div>
+          <div class="metric-icon icon-cyan">💬</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-data">
+            <span>Saved Contacts</span>
+            <div class="metric-value" id="stat-total-contacts">0</div>
+          </div>
+          <div class="metric-icon icon-emerald">📇</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-data">
+            <span>Backend Engine</span>
+            <div class="metric-value" style="font-size: 1.25rem; color: #34d399;">Zero-DB</div>
+          </div>
+          <div class="metric-icon icon-rose">⚡</div>
+        </div>
+      </section>
+
+      <!-- Workspace Grid (Caller & SMS) -->
+      <div class="grid-two-col">
+        
+        <!-- Left: Phone Caller Widget -->
+        <section class="panel-card" id="section-caller">
+          <div class="panel-header">
+            <h3 class="panel-title">📞 Voice Call Station</h3>
+            <span style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: 600;">E.164 Standard</span>
+          </div>
+
+          <div class="phone-widget">
+            <div class="screen-box">
+              <input type="tel" id="call-phone-input" class="phone-display-input" placeholder="+923001234567" autocomplete="tel">
+              <div class="call-state-bar">
+                <span class="status-dot" id="call-status-dot"></span>
+                <span id="call-status-label">Status: Ready</span>
+                <span style="margin: 0 0.4rem; opacity: 0.3;">|</span>
+                <span class="live-timer" id="call-timer-display">00:00</span>
+              </div>
+            </div>
+
+            <!-- Touch Keypad -->
+            <div class="dialpad-grid">
+              <button class="num-btn" data-digit="1">1<sub>&nbsp;</sub></button>
+              <button class="num-btn" data-digit="2">2<sub>ABC</sub></button>
+              <button class="num-btn" data-digit="3">3<sub>DEF</sub></button>
+              <button class="num-btn" data-digit="4">4<sub>GHI</sub></button>
+              <button class="num-btn" data-digit="5">5<sub>JKL</sub></button>
+              <button class="num-btn" data-digit="6">6<sub>MNO</sub></button>
+              <button class="num-btn" data-digit="7">7<sub>PQRS</sub></button>
+              <button class="num-btn" data-digit="8">8<sub>TUV</sub></button>
+              <button class="num-btn" data-digit="9">9<sub>WXYZ</sub></button>
+              <button class="num-btn" data-digit="*">*<sub>&nbsp;</sub></button>
+              <button class="num-btn" data-digit="0">0<sub>+</sub></button>
+              <button class="num-btn" data-digit="#">#<sub>&nbsp;</sub></button>
+            </div>
+
+            <div class="action-row">
+              <button id="btn-make-call" class="btn btn-emerald" style="flex: 1; padding: 0.85rem;">
+                📞 CALL NOW
+              </button>
+              <button id="btn-end-call" class="btn btn-rose" style="display: none; padding: 0.85rem;">
+                📵 END CALL
+              </button>
+              <button id="clear-phone-btn" class="btn btn-outline" title="Clear Number">
+                ✕ Clear
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Right: SMS Dispatch Center -->
+        <section class="panel-card" id="section-sms">
+          <div class="panel-header">
+            <h3 class="panel-title">💬 SMS Messaging Station</h3>
+            <span style="font-size: 0.75rem; color: var(--accent-indigo); font-weight: 600;">Twilio Messaging</span>
+          </div>
+
+          <form id="form-send-sms" style="display: flex; flex-direction: column; flex: 1;">
+            <div class="form-group">
+              <label class="form-label" for="sms-recipient-input">Recipient Phone Number (E.164)</label>
+              <input type="tel" id="sms-recipient-input" class="input-control" placeholder="+923001234567" required autocomplete="tel">
+            </div>
+
+            <div class="form-group" style="flex: 1;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <label class="form-label" for="sms-body-input">Message Content</label>
+                <span id="sms-char-counter" style="font-size: 0.75rem; color: var(--text-muted);">0 / 160 chars (1 Segment)</span>
+              </div>
+              <textarea id="sms-body-input" class="input-control" rows="5" placeholder="Type your SMS message here..." required style="resize: vertical; min-height: 140px; margin-top: 0.4rem;"></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem; padding: 0.85rem;">
+              ✉️ DISPATCH SMS
+            </button>
+          </form>
+        </section>
+
+      </div>
+
+      <!-- Lower Workspace: Contacts & SMS Activity -->
+      <div class="grid-two-col">
+        
+        <!-- Contacts Panel -->
+        <section class="panel-card" id="section-contacts">
+          <div class="panel-header">
+            <h3 class="panel-title">📇 Contacts Manager</h3>
+            <button class="btn btn-primary btn-sm" id="btn-open-contact-modal">+ Add Contact</button>
+          </div>
+
+          <div class="contacts-grid" id="contacts-list-container">
+            <div class="empty-placeholder">Loading contacts directory...</div>
+          </div>
+        </section>
+
+        <!-- SMS Logs Panel -->
+        <section class="panel-card">
+          <div class="panel-header">
+            <h3 class="panel-title">📩 SMS Dispatch Logs</h3>
+            <button class="btn btn-outline btn-sm" onclick="fetchSmsHistory()">🔄 Refresh</button>
+          </div>
+
+          <div class="contacts-grid" id="sms-history-list">
+            <div class="empty-placeholder">Loading SMS log history...</div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- Call History Table -->
+      <section class="panel-card" id="section-logs">
+        <div class="panel-header">
+          <h3 class="panel-title">📋 Full Call Activity Logs</h3>
+          <button class="btn btn-outline btn-sm" onclick="fetchCallHistory()">🔄 Refresh Logs</button>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Destination Phone</th>
+                <th>Call Status</th>
+                <th>Duration</th>
+                <th>Timestamp</th>
+              </tr>
+            </thead>
+            <tbody id="call-history-tbody">
+              <tr>
+                <td colspan="4" class="empty-placeholder">Loading call activity...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Contact Modal -->
+  <div class="modal-overlay" id="contact-modal">
+    <div class="modal-box">
+      <div class="panel-header" style="margin-bottom: 1.25rem;">
+        <h3 id="contact-modal-title" style="font-size: 1.2rem;">Add New Contact</h3>
+        <button class="btn btn-outline btn-sm" id="btn-close-contact-modal" style="padding: 0.2rem 0.5rem;">✕</button>
+      </div>
+
+      <form id="form-save-contact">
+        <input type="hidden" id="contact-id-input">
+        
+        <div class="form-group">
+          <label class="form-label" for="contact-name-input">Full Name</label>
+          <input type="text" id="contact-name-input" class="input-control" placeholder="e.g. Ali Ahmed" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="contact-phone-input">Phone Number (E.164 Format)</label>
+          <input type="tel" id="contact-phone-input" class="input-control" placeholder="+923001234567" required>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+          <button type="submit" class="btn btn-primary" style="flex: 1;">Save Contact Record</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification System -->
+  <div id="toast-container"></div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>
