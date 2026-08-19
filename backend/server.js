@@ -14,6 +14,10 @@ const callRoutes = require('./routes/callRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const leadRoutes = require('./routes/leadRoutes');
+const emailRoutes = require('./routes/emailRoutes');
+const managerRoutes = require('./routes/managerRoutes');
+const campaignRoutes = require('./routes/campaignRoutes');
 
 const app = express();
 
@@ -34,6 +38,10 @@ app.use('/api/calls', callRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/leads', leadRoutes);
+app.use('/api/email', emailRoutes);
+app.use('/api/manager', managerRoutes);
+app.use('/api/campaigns', campaignRoutes);
 
 const frontendPath = path.join(__dirname, '../frontend');
 app.use(express.static(frontendPath));

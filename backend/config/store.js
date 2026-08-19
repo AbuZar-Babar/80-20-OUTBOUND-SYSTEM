@@ -8,6 +8,9 @@ const User = require('../models/User');
 const Call = require('../models/Call');
 const Message = require('../models/Message');
 const Contact = require('../models/Contact');
+const Lead = require('../models/Lead');
+const Campaign = require('../models/Campaign');
+const ActivityLog = require('../models/ActivityLog');
 
 // Zero-DB local persistence
 const DATA_DIR = path.join(__dirname, '../../data');
@@ -143,6 +146,18 @@ const UserStore = {
     const deleted = store.users.length < initialLength;
     if (deleted) saveStore();
     return deleted;
+  },
+
+  async updateRole(id, role) {
+    if (isMongoConnected()) {
+      return await User.findByIdAndUpdate(id, { role }, { new: true }).select('-password').lean();
+    }
+    const user = store.users.find(u => u._id === id);
+    if (!user) return null;
+    user.role = role;
+    saveStore();
+    const { password, ...rest } = user;
+    return rest;
   }
 };
 
@@ -298,7 +313,233 @@ const ContactStore = {
   }
 };
 
+// --- Lead Operations ---
+const LeadStore = {
+  async create(data) {
+    if (isMongoConnected()) {
+      return await Lead.create(data);
+    }
+    const lead = { _id: generateId(), ...data, createdAt: new Date().toISOString() };
+    if (!store.leads) store.leads = [];
+    store.leads.push(lead);
+    saveStore();
+    return lead;
+  },
+
+  async createBulk(leads) {
+    if (isMongoConnected()) {
+      return await Lead.insertMany(leads);
+    }
+    if (!store.leads) store.leads = [];
+    const newLeads = leads.map(l => ({ _id: generateId(), ...l, createdAt: new Date().toISOString() }));
+    store.leads.push(...newLeads);
+    saveStore();
+    return newLeads;
+  },
+
+  async findById(id) {
+    if (isMongoConnected()) return await Lead.findById(id).lean();
+    if (!store.leads) return null;
+    return store.leads.find(l => l._id === id) || null;
+  },
+
+  async findByUser(userId) {
+    if (isMongoConnected()) return await Lead.find({ userId }).sort({ createdAt: -1 }).lean();
+    if (!store.leads) return [];
+    return store.leads.filter(l => l.userId === userId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  },
+
+  async findByCampaign(campaignId) {
+    if (isMongoConnected()) return await Lead.find({ campaignId }).sort({ createdAt: -1 }).lean();
+    if (!store.leads) return [];
+    return store.leads.filter(l => l.campaignId === campaignId);
+  },
+
+  async findDailyQueue(userId) {
+    if (isMongoConnected()) {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const endOfDay = new Date(today);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const overdue = await Lead.find({ userId, status: 'callback', callbackDate: { $lt: now } }).sort({ callbackDate: 1 }).lean();
+      const dueToday = await Lead.find({ userId, status: 'callback', callbackDate: { $gte: today, $lte: endOfDay } }).sort({ callbackDate: 1 }).lean();
+      const interested = await Lead.find({ userId, status: 'interested', coldOutreachStopped: false }).sort({ 'assignment.priority': -1 }).lean();
+      const newLeads = await Lead.find({ userId, status: 'new' }).sort({ 'assignment.priority': -1 }).limit(50).lean();
+
+      return { overdue, dueToday, interested, newLeads };
+    }
+    if (!store.leads) return { overdue: [], dueToday: [], interested: [], newLeads: [] };
+    const userLeads = store.leads.filter(l => l.userId === userId);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfDay = new Date(today); endOfDay.setHours(23, 59, 59, 999);
+    return {
+      overdue: userLeads.filter(l => l.status === 'callback' && l.callbackDate && new Date(l.callbackDate) < now),
+      dueToday: userLeads.filter(l => l.status === 'callback' && l.callbackDate && new Date(l.callbackDate) >= today && new Date(l.callbackDate) <= endOfDay),
+      interested: userLeads.filter(l => l.status === 'interested' && !l.coldOutreachStopped),
+      newLeads: userLeads.filter(l => l.status === 'new').sort((a, b) => (b.assignment?.priority || 0) - (a.assignment?.priority || 0)).slice(0, 50)
+    };
+  },
+
+  async findPendingByPhone(phone) {
+    if (isMongoConnected()) return await Lead.find({ 'contact.phone': phone }).lean();
+    if (!store.leads) return [];
+    return store.leads.filter(l => l.contact?.phone === phone);
+  },
+
+  async findPendingByEmail(email) {
+    if (isMongoConnected()) return await Lead.find({ 'contact.email': email.toLowerCase() }).lean();
+    if (!store.leads) return [];
+    return store.leads.filter(l => l.contact?.email?.toLowerCase() === email.toLowerCase());
+  },
+
+  async update(id, updateData) {
+    if (isMongoConnected()) return await Lead.findByIdAndUpdate(id, updateData, { new: true }).lean();
+    if (!store.leads) return null;
+    const idx = store.leads.findIndex(l => l._id === id);
+    if (idx === -1) return null;
+    store.leads[idx] = { ...store.leads[idx], ...updateData };
+    saveStore();
+    return store.leads[idx];
+  },
+
+  async delete(id) {
+    if (isMongoConnected()) { await Lead.findByIdAndDelete(id); return true; }
+    if (!store.leads) return false;
+    const len = store.leads.length;
+    store.leads = store.leads.filter(l => l._id !== id);
+    if (store.leads.length < len) { saveStore(); return true; }
+    return false;
+  },
+
+  async countByUser(userId) {
+    if (isMongoConnected()) return await Lead.countDocuments({ userId });
+    if (!store.leads) return 0;
+    return store.leads.filter(l => l.userId === userId).length;
+  },
+
+  async getManagerMetrics(userId) {
+    if (isMongoConnected()) {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const total = await Lead.countDocuments({ userId });
+      const contacted = await Lead.countDocuments({ userId, status: { $ne: 'new' } });
+      const interested = await Lead.countDocuments({ userId, status: 'interested' });
+      const booked = await Lead.countDocuments({ userId, status: 'meeting-booked' });
+      const callbacksOverdue = await Lead.countDocuments({ userId, status: 'callback', callbackDate: { $lt: now } });
+      const untouched = await Lead.countDocuments({ userId, status: 'new' });
+      return { total, contacted, interested, booked, callbacksOverdue, untouched };
+    }
+    if (!store.leads) return { total: 0, contacted: 0, interested: 0, booked: 0, callbacksOverdue: 0, untouched: 0 };
+    const leads = store.leads.filter(l => l.userId === userId);
+    const now = new Date();
+    return {
+      total: leads.length,
+      contacted: leads.filter(l => l.status !== 'new').length,
+      interested: leads.filter(l => l.status === 'interested').length,
+      booked: leads.filter(l => l.status === 'meeting-booked').length,
+      callbacksOverdue: leads.filter(l => l.status === 'callback' && l.callbackDate && new Date(l.callbackDate) < now).length,
+      untouched: leads.filter(l => l.status === 'new').length
+    };
+  }
+};
+
+// --- Campaign Operations ---
+const CampaignStore = {
+  async create(data) {
+    if (isMongoConnected()) return await Campaign.create(data);
+    const campaign = { _id: generateId(), ...data, totalLeads: 0, createdAt: new Date().toISOString() };
+    if (!store.campaigns) store.campaigns = [];
+    store.campaigns.push(campaign);
+    saveStore();
+    return campaign;
+  },
+
+  async findAll() {
+    if (isMongoConnected()) return await Campaign.find().sort({ createdAt: -1 }).lean();
+    if (!store.campaigns) return [];
+    return store.campaigns.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  },
+
+  async findById(id) {
+    if (isMongoConnected()) return await Campaign.findById(id).lean();
+    if (!store.campaigns) return null;
+    return store.campaigns.find(c => c._id === id) || null;
+  },
+
+  async update(id, data) {
+    if (isMongoConnected()) return await Campaign.findByIdAndUpdate(id, data, { new: true }).lean();
+    if (!store.campaigns) return null;
+    const idx = store.campaigns.findIndex(c => c._id === id);
+    if (idx === -1) return null;
+    store.campaigns[idx] = { ...store.campaigns[idx], ...data };
+    saveStore();
+    return store.campaigns[idx];
+  },
+
+  async delete(id) {
+    if (isMongoConnected()) { await Campaign.findByIdAndDelete(id); return true; }
+    if (!store.campaigns) return false;
+    const len = store.campaigns.length;
+    store.campaigns = store.campaigns.filter(c => c._id !== id);
+    if (store.campaigns.length < len) { saveStore(); return true; }
+    return false;
+  }
+};
+
+// --- ActivityLog Operations ---
+const ActivityLogStore = {
+  async create(data) {
+    if (isMongoConnected()) return await ActivityLog.create(data);
+    const log = { _id: generateId(), ...data, timestamp: new Date().toISOString() };
+    if (!store.activityLogs) store.activityLogs = [];
+    store.activityLogs.unshift(log);
+    saveStore();
+    return log;
+  },
+
+  async findByLead(leadId) {
+    if (isMongoConnected()) return await ActivityLog.find({ leadId }).sort({ timestamp: -1 }).lean();
+    if (!store.activityLogs) return [];
+    return store.activityLogs.filter(l => l.leadId === leadId).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  },
+
+  async findByUser(userId, limit = 100) {
+    if (isMongoConnected()) return await ActivityLog.find({ userId }).sort({ timestamp: -1 }).limit(limit).lean();
+    if (!store.activityLogs) return [];
+    return store.activityLogs.filter(l => l.userId === userId).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, limit);
+  },
+
+  async getUserStats(userId) {
+    if (isMongoConnected()) {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const calls = await ActivityLog.countDocuments({ userId, action: 'call', timestamp: { $gte: today } });
+      const emails = await ActivityLog.countDocuments({ userId, action: 'email', timestamp: { $gte: today } });
+      const smss = await ActivityLog.countDocuments({ userId, action: 'sms', timestamp: { $gte: today } });
+      const notes = await ActivityLog.countDocuments({ userId, action: 'note', timestamp: { $gte: today } });
+      const totalTalkTime = await ActivityLog.aggregate([
+        { $match: { userId: require('mongoose').Types.ObjectId.createFromHexString(userId), action: 'call', timestamp: { $gte: today } } },
+        { $group: { _id: null, total: { $sum: '$duration' } } }
+      ]);
+      return { callsToday: calls, emailsToday: emails, smsToday: smss, notesToday: notes, talkTimeToday: totalTalkTime[0]?.total || 0 };
+    }
+    if (!store.activityLogs) return { callsToday: 0, emailsToday: 0, smsToday: 0, notesToday: 0, talkTimeToday: 0 };
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const userLogs = store.activityLogs.filter(l => l.userId === userId && new Date(l.timestamp) >= today);
+    return {
+      callsToday: userLogs.filter(l => l.action === 'call').length,
+      emailsToday: userLogs.filter(l => l.action === 'email').length,
+      smsToday: userLogs.filter(l => l.action === 'sms').length,
+      notesToday: userLogs.filter(l => l.action === 'note').length,
+      talkTimeToday: userLogs.filter(l => l.action === 'call').reduce((sum, l) => sum + (l.duration || 0), 0)
+    };
+  }
+};
+
 // Initialize Zero-DB on load
 loadStore();
 
-module.exports = { UserStore, CallStore, MessageStore, ContactStore };
+module.exports = { UserStore, CallStore, MessageStore, ContactStore, LeadStore, CampaignStore, ActivityLogStore };

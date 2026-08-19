@@ -3,292 +3,253 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Professional Telecommunications Dashboard for Web Calling & SMS">
-  <title>Dialer MVP - Enterprise Dashboard</title>
+  <meta name="description" content="80/20 Essential Dialer - Outbound Sales System">
+  <title>80/20 Essential Dialer</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
   <div class="app-layout">
-    
-    <!-- Sidebar Navigation -->
     <aside class="app-sidebar">
       <div class="brand-header">
-        <div class="brand-logo">📡</div>
+        <div class="brand-logo">80</div>
         <div class="brand-info">
-          <h1>Dialer MVP</h1>
-          <span>Telephony Hub</span>
+          <h1>80/20 Dialer</h1>
+          <span>Essential V1</span>
         </div>
       </div>
-
       <nav>
         <ul class="nav-menu">
-          <li class="nav-item active" data-section="overview">
-            <span class="nav-item-icon">📊</span> Overview
-          </li>
-          <li class="nav-item" data-section="caller">
-            <span class="nav-item-icon">📞</span> Phone Caller
-          </li>
-          <li class="nav-item" data-section="sms">
-            <span class="nav-item-icon">💬</span> SMS Station
-          </li>
-          <li class="nav-item" data-section="contacts">
-            <span class="nav-item-icon">📇</span> Contacts Book
-          </li>
-          <li class="nav-item" data-section="logs">
-            <span class="nav-item-icon">📋</span> Activity Logs
-          </li>
-          <li class="nav-item" data-section="admin" id="nav-admin" style="display: none;">
-            <span class="nav-item-icon">👥</span> User Approvals
-          </li>
+          <li class="nav-item active" data-section="overview"><span class="nav-item-icon">📊</span> Overview</li>
+          <li class="nav-item" data-section="queue"><span class="nav-item-icon">📋</span> Daily Queue</li>
+          <li class="nav-item" data-section="caller"><span class="nav-item-icon">📞</span> Dialer</li>
+          <li class="nav-item" data-section="sms"><span class="nav-item-icon">💬</span> SMS</li>
+          <li class="nav-item" data-section="email"><span class="nav-item-icon">✉️</span> Email</li>
+          <li class="nav-item" data-section="leads"><span class="nav-item-icon">🎯</span> All Leads</li>
+          <li class="nav-item" data-section="campaigns"><span class="nav-item-icon">📢</span> Campaigns</li>
+          <li class="nav-item" data-section="activity"><span class="nav-item-icon">📜</span> Activity Log</li>
+          <li class="nav-item" data-section="team" id="nav-team" style="display:none"><span class="nav-item-icon">👥</span> Team</li>
+          <li class="nav-item" data-section="admin" id="nav-admin" style="display:none"><span class="nav-item-icon">⚙️</span> User Mgmt</li>
         </ul>
       </nav>
-
       <div class="sidebar-footer">
         <div class="sidebar-user">
           <div class="user-avatar-circle" id="user-avatar-initial">U</div>
           <div class="user-details">
-            <div class="user-name-text" id="user-name-display">Loading User...</div>
-            <div class="user-email-text" id="user-email-display">user@example.com</div>
+            <div class="user-name-text" id="user-name-display">Loading...</div>
+            <div class="user-email-text" id="user-email-display"></div>
           </div>
-          <button class="btn btn-outline btn-sm" onclick="logoutUser()" title="Logout" style="padding: 0.35rem 0.6rem;">
-            🚪
-          </button>
+          <button class="btn btn-outline btn-sm" onclick="logoutUser()" title="Logout">🚪</button>
         </div>
       </div>
     </aside>
 
-    <!-- Main Content Area -->
     <main class="app-main">
-      
-      <!-- Top Header -->
       <header class="main-header">
         <div class="header-title-area">
-          <h2>Dialer MVP</h2>
-          <p>Real-time Voice Calling, SMS Messaging & Contact Management</p>
+          <h2 id="page-title">Overview</h2>
+          <p id="page-subtitle">Sales dashboard and metrics</p>
         </div>
-
-        <div class="status-pill">
+        <div class="status-pill" id="alerts-pill" style="display:none">
           <span class="status-pulse-dot"></span>
-          <span>Twilio Service: Operational</span>
+          <span id="alerts-text">0 alerts</span>
         </div>
       </header>
 
-      <!-- Quick Metrics Row -->
-      <section class="metrics-row">
-        <div class="metric-card">
-          <div class="metric-data">
-            <span>Total Calls Initiated</span>
-            <div class="metric-value" id="stat-total-calls">0</div>
-          </div>
-          <div class="metric-icon icon-indigo">📞</div>
+      <!-- OVERVIEW -->
+      <section class="panel-card" id="section-overview">
+        <div class="metrics-row">
+          <div class="metric-card"><div class="metric-data"><span>Assigned Leads</span><div class="metric-value" id="m-total">0</div></div><div class="metric-icon icon-indigo">🎯</div></div>
+          <div class="metric-card"><div class="metric-data"><span>Contacted</span><div class="metric-value" id="m-contacted">0</div></div><div class="metric-icon icon-cyan">📞</div></div>
+          <div class="metric-card"><div class="metric-data"><span>Interested</span><div class="metric-value" id="m-interested">0</div></div><div class="metric-icon icon-emerald">🔥</div></div>
+          <div class="metric-card"><div class="metric-data"><span>Booked</span><div class="metric-value" id="m-booked">0</div></div><div class="metric-icon icon-rose">📅</div></div>
         </div>
-
-        <div class="metric-card">
-          <div class="metric-data">
-            <span>Sent Messages</span>
-            <div class="metric-value" id="stat-total-sms">0</div>
-          </div>
-          <div class="metric-icon icon-cyan">💬</div>
-        </div>
-
-        <div class="metric-card">
-          <div class="metric-data">
-            <span>Saved Contacts</span>
-            <div class="metric-value" id="stat-total-contacts">0</div>
-          </div>
-          <div class="metric-icon icon-emerald">📇</div>
-        </div>
-
-        <div class="metric-card">
-          <div class="metric-data">
-            <span>Backend Engine</span>
-            <div class="metric-value" style="font-size: 1.25rem; color: #34d399;">Zero-DB</div>
-          </div>
-          <div class="metric-icon icon-rose">⚡</div>
+        <div class="metrics-row">
+          <div class="metric-card"><div class="metric-data"><span>Calls Today</span><div class="metric-value" id="m-calls-today">0</div></div><div class="metric-icon icon-indigo">📞</div></div>
+          <div class="metric-card"><div class="metric-data"><span>Emails Today</span><div class="metric-value" id="m-emails-today">0</div></div><div class="metric-icon icon-cyan">✉️</div></div>
+          <div class="metric-card"><div class="metric-data"><span>SMS Today</span><div class="metric-value" id="m-sms-today">0</div></div><div class="metric-icon icon-emerald">💬</div></div>
+          <div class="metric-card"><div class="metric-data"><span>Overdue Callbacks</span><div class="metric-value" id="m-overdue" style="color: var(--accent-rose);">0</div></div><div class="metric-icon icon-rose">⚠️</div></div>
         </div>
       </section>
 
-      <!-- Workspace Grid (Caller & SMS) -->
-      <div class="grid-two-col">
-        
-        <!-- Left: Phone Caller Widget -->
-        <section class="panel-card" id="section-caller">
-          <div class="panel-header">
-            <h3 class="panel-title">📞 Voice Call Station</h3>
-            <span style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: 600;">E.164 Standard</span>
-          </div>
-
-          <div class="phone-widget">
-            <div class="screen-box">
-              <input type="tel" id="call-phone-input" class="phone-display-input" placeholder="+923001234567" autocomplete="tel">
-              <div class="call-state-bar">
-                <span class="status-dot" id="call-status-dot"></span>
-                <span id="call-status-label">Status: Ready</span>
-                <span style="margin: 0 0.4rem; opacity: 0.3;">|</span>
-                <span class="live-timer" id="call-timer-display">00:00</span>
-              </div>
-            </div>
-
-            <!-- Touch Keypad -->
-            <div class="dialpad-grid">
-              <button class="num-btn" data-digit="1">1<sub>&nbsp;</sub></button>
-              <button class="num-btn" data-digit="2">2<sub>ABC</sub></button>
-              <button class="num-btn" data-digit="3">3<sub>DEF</sub></button>
-              <button class="num-btn" data-digit="4">4<sub>GHI</sub></button>
-              <button class="num-btn" data-digit="5">5<sub>JKL</sub></button>
-              <button class="num-btn" data-digit="6">6<sub>MNO</sub></button>
-              <button class="num-btn" data-digit="7">7<sub>PQRS</sub></button>
-              <button class="num-btn" data-digit="8">8<sub>TUV</sub></button>
-              <button class="num-btn" data-digit="9">9<sub>WXYZ</sub></button>
-              <button class="num-btn" data-digit="*">*<sub>&nbsp;</sub></button>
-              <button class="num-btn" data-digit="0">0<sub>+</sub></button>
-              <button class="num-btn" data-digit="#">#<sub>&nbsp;</sub></button>
-            </div>
-
-            <div class="action-row">
-              <button id="btn-make-call" class="btn btn-emerald" style="flex: 1; padding: 0.85rem;">
-                📞 CALL NOW
-              </button>
-              <button id="btn-end-call" class="btn btn-rose" style="display: none; padding: 0.85rem;">
-                📵 END CALL
-              </button>
-              <button id="clear-phone-btn" class="btn btn-outline" title="Clear Number">
-                ✕ Clear
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <!-- Right: SMS Dispatch Center -->
-        <section class="panel-card" id="section-sms">
-          <div class="panel-header">
-            <h3 class="panel-title">💬 SMS Messaging Station</h3>
-            <span style="font-size: 0.75rem; color: var(--accent-indigo); font-weight: 600;">Twilio Messaging</span>
-          </div>
-
-          <form id="form-send-sms" style="display: flex; flex-direction: column; flex: 1;">
-            <div class="form-group">
-              <label class="form-label" for="sms-recipient-input">Recipient Phone Number (E.164)</label>
-              <input type="tel" id="sms-recipient-input" class="input-control" placeholder="+923001234567" required autocomplete="tel">
-            </div>
-
-            <div class="form-group" style="flex: 1;">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <label class="form-label" for="sms-body-input">Message Content</label>
-                <span id="sms-char-counter" style="font-size: 0.75rem; color: var(--text-muted);">0 / 160 chars (1 Segment)</span>
-              </div>
-              <textarea id="sms-body-input" class="input-control" rows="5" placeholder="Type your SMS message here..." required style="resize: vertical; min-height: 140px; margin-top: 0.4rem;"></textarea>
-            </div>
-
-            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem; padding: 0.85rem;">
-              ✉️ DISPATCH SMS
-            </button>
-          </form>
-        </section>
-
-      </div>
-
-      <!-- Lower Workspace: Contacts & SMS Activity -->
-      <div class="grid-two-col">
-        
-        <!-- Contacts Panel -->
-        <section class="panel-card" id="section-contacts">
-          <div class="panel-header">
-            <h3 class="panel-title">📇 Contacts Manager</h3>
-            <button class="btn btn-primary btn-sm" id="btn-open-contact-modal">+ Add Contact</button>
-          </div>
-
-          <div class="contacts-grid" id="contacts-list-container">
-            <div class="empty-placeholder">Loading contacts directory...</div>
-          </div>
-        </section>
-
-        <!-- SMS Logs Panel -->
-        <section class="panel-card">
-          <div class="panel-header">
-            <h3 class="panel-title">📩 SMS Dispatch Logs</h3>
-            <button class="btn btn-outline btn-sm" onclick="fetchSmsHistory()">🔄 Refresh</button>
-          </div>
-
-          <div class="contacts-grid" id="sms-history-list">
-            <div class="empty-placeholder">Loading SMS log history...</div>
-          </div>
-        </section>
-
-      </div>
-
-      <!-- Call History Table -->
-      <section class="panel-card" id="section-logs">
+      <!-- DAILY QUEUE -->
+      <section class="panel-card" id="section-queue" style="display:none">
         <div class="panel-header">
-          <h3 class="panel-title">Full Call Activity Logs</h3>
-          <button class="btn btn-outline btn-sm" onclick="fetchCallHistory()">Refresh Logs</button>
+          <h3 class="panel-title">📋 Daily Queue</h3>
+          <button class="btn btn-outline btn-sm" onclick="fetchQueue()">Refresh</button>
         </div>
+        <div id="queue-overdue" style="margin-bottom:1rem"></div>
+        <div id="queue-due-today" style="margin-bottom:1rem"></div>
+        <div id="queue-interested" style="margin-bottom:1rem"></div>
+        <div id="queue-new"></div>
+      </section>
 
+      <!-- DIALER -->
+      <section class="panel-card" id="section-caller" style="display:none">
+        <div class="panel-header">
+          <h3 class="panel-title">📞 Voice Call Station</h3>
+          <span style="font-size:0.75rem;color:var(--accent-cyan);font-weight:600;">E.164 Standard</span>
+        </div>
+        <div class="phone-widget">
+          <div class="screen-box">
+            <input type="tel" id="call-phone-input" class="phone-display-input" placeholder="+923001234567" autocomplete="tel">
+            <div class="call-state-bar">
+              <span class="status-dot" id="call-status-dot"></span>
+              <span id="call-status-label">Status: Ready</span>
+              <span style="margin:0 0.4rem;opacity:0.3">|</span>
+              <span class="live-timer" id="call-timer-display">00:00</span>
+            </div>
+          </div>
+          <div class="dialpad-grid">
+            <button class="num-btn" data-digit="1">1</button><button class="num-btn" data-digit="2">2<sub>ABC</sub></button><button class="num-btn" data-digit="3">3<sub>DEF</sub></button>
+            <button class="num-btn" data-digit="4">4<sub>GHI</sub></button><button class="num-btn" data-digit="5">5<sub>JKL</sub></button><button class="num-btn" data-digit="6">6<sub>MNO</sub></button>
+            <button class="num-btn" data-digit="7">7<sub>PQRS</sub></button><button class="num-btn" data-digit="8">8<sub>TUV</sub></button><button class="num-btn" data-digit="9">9<sub>WXYZ</sub></button>
+            <button class="num-btn" data-digit="*">*</button><button class="num-btn" data-digit="0">0<sub>+</sub></button><button class="num-btn" data-digit="#">#</button>
+          </div>
+          <div class="action-row">
+            <button id="btn-make-call" class="btn btn-emerald" style="flex:1;padding:0.85rem;">📞 CALL NOW</button>
+            <button id="btn-end-call" class="btn btn-rose" style="display:none;padding:0.85rem;">📵 END</button>
+            <button id="clear-phone-btn" class="btn btn-outline">✕ Clear</button>
+          </div>
+        </div>
+        <div class="outcome-panel" id="outcome-panel" style="display:none;margin-top:1.5rem">
+          <h4 style="margin-bottom:0.75rem;">Set Outcome</h4>
+          <div class="outcome-grid">
+            <button class="btn btn-sm btn-outline" onclick="setOutcome('no-answer')">No Answer</button>
+            <button class="btn btn-sm btn-outline" onclick="setOutcome('busy')">Busy</button>
+            <button class="btn btn-sm btn-outline" onclick="setOutcome('voicemail')">Voicemail</button>
+            <button class="btn btn-sm btn-outline" onclick="showCallbackForm()">Callback</button>
+            <button class="btn btn-sm btn-outline" onclick="setOutcome('send-info')">Send Info</button>
+            <button class="btn btn-sm btn-emerald" onclick="setOutcome('interested')">Interested</button>
+            <button class="btn btn-sm btn-primary" onclick="showBookingForm()">Book Meeting</button>
+            <button class="btn btn-sm btn-outline" onclick="setOutcome('not-interested')">Not Interested</button>
+            <button class="btn btn-sm btn-rose" onclick="setOutcome('dnc')">DNC</button>
+          </div>
+          <div class="form-group" style="margin-top:1rem">
+            <label class="form-label">Call Notes</label>
+            <textarea id="call-notes" class="input-control" rows="2" placeholder="Notes about this call..."></textarea>
+          </div>
+          <div id="callback-form" style="display:none;margin-top:1rem">
+            <div class="form-group">
+              <label class="form-label">Callback Date & Time</label>
+              <input type="datetime-local" id="callback-datetime" class="input-control">
+            </div>
+          </div>
+          <div id="booking-form" style="display:none;margin-top:1rem">
+            <div class="form-group"><label class="form-label">Meeting Date & Time</label><input type="datetime-local" id="booking-datetime" class="input-control"></div>
+            <div class="form-group"><label class="form-label">Closer Name</label><input type="text" id="booking-closer" class="input-control" placeholder="Closer name"></div>
+            <div class="form-group"><label class="form-label">Meeting Link</label><input type="url" id="booking-link" class="input-control" placeholder="https://..."></div>
+          </div>
+          <button id="btn-submit-outcome" class="btn btn-primary" style="width:100%;margin-top:1rem;padding:0.85rem;display:none" onclick="submitOutcome()">Submit Outcome</button>
+        </div>
+      </section>
+
+      <!-- SMS -->
+      <section class="panel-card" id="section-sms" style="display:none">
+        <div class="panel-header"><h3 class="panel-title">💬 SMS Station</h3></div>
+        <form id="form-send-sms">
+          <div class="form-group"><label class="form-label">Recipient (E.164)</label><input type="tel" id="sms-recipient-input" class="input-control" placeholder="+923001234567" required></div>
+          <div class="form-group" style="flex:1"><div style="display:flex;justify-content:space-between"><label class="form-label">Message</label><span id="sms-char-counter" style="font-size:0.75rem;color:var(--text-muted)">0/160</span></div><textarea id="sms-body-input" class="input-control" rows="4" required style="resize:vertical;min-height:120px;margin-top:0.4rem"></textarea></div>
+          <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1rem;padding:0.85rem">✉️ SEND SMS</button>
+        </form>
+      </section>
+
+      <!-- EMAIL -->
+      <section class="panel-card" id="section-email" style="display:none">
+        <div class="panel-header"><h3 class="panel-title">✉️ Email Station</h3></div>
+        <form id="form-send-email">
+          <div class="form-group"><label class="form-label">Lead ID</label><input type="text" id="email-lead-id" class="input-control" placeholder="Lead ID" required></div>
+          <div class="form-group"><label class="form-label">To Email</label><input type="email" id="email-to" class="input-control" placeholder="lead@example.com" required></div>
+          <div class="form-group"><label class="form-label">Subject</label><input type="text" id="email-subject" class="input-control" placeholder="Email subject" required></div>
+          <div class="form-group" style="flex:1"><label class="form-label">Body (HTML supported)</label><textarea id="email-body" class="input-control" rows="6" required style="resize:vertical;min-height:150px;margin-top:0.4rem"></textarea></div>
+          <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1rem;padding:0.85rem">✉️ SEND EMAIL</button>
+        </form>
+      </section>
+
+      <!-- ALL LEADS -->
+      <section class="panel-card" id="section-leads" style="display:none">
+        <div class="panel-header">
+          <h3 class="panel-title">🎯 All Leads</h3>
+          <div style="display:flex;gap:0.5rem">
+            <button class="btn btn-outline btn-sm" onclick="showUploadModal()">Upload CSV</button>
+            <button class="btn btn-outline btn-sm" onclick="fetchLeads()">Refresh</button>
+          </div>
+        </div>
         <div class="table-wrapper">
           <table class="data-table">
-            <thead>
-              <tr>
-                <th>Destination Phone</th>
-                <th>Call Status</th>
-                <th>Duration</th>
-                <th>Recording</th>
-                <th>Timestamp</th>
-              </tr>
-            </thead>
-            <tbody id="call-history-tbody">
-              <tr>
-                <td colspan="5" class="empty-placeholder">Loading call activity...</td>
-              </tr>
-            </tbody>
+            <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Company</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="leads-tbody"><tr><td colspan="6" class="empty-placeholder">Loading leads...</td></tr></tbody>
           </table>
         </div>
       </section>
 
-      <!-- Admin Panel -->
-      <section class="panel-card" id="section-admin" style="display: none;">
+      <!-- CAMPAIGNS -->
+      <section class="panel-card" id="section-campaigns" style="display:none">
         <div class="panel-header">
-          <h3 class="panel-title">Admin - User Management</h3>
-          <button class="btn btn-outline btn-sm" onclick="fetchPendingUsers()">Refresh</button>
+          <h3 class="panel-title">📢 Campaigns</h3>
+          <button class="btn btn-primary btn-sm" onclick="showCampaignModal()">+ New Campaign</button>
         </div>
+        <div id="campaigns-list"><div class="empty-placeholder">Loading campaigns...</div></div>
+      </section>
 
-        <div id="pending-users-list">
-          <div class="empty-placeholder">Loading pending users...</div>
+      <!-- ACTIVITY -->
+      <section class="panel-card" id="section-activity" style="display:none">
+        <div class="panel-header">
+          <h3 class="panel-title">📜 Activity Log</h3>
+          <button class="btn btn-outline btn-sm" onclick="fetchActivity()">Refresh</button>
         </div>
+        <div id="activity-list"><div class="empty-placeholder">Loading activity...</div></div>
+      </section>
+
+      <!-- TEAM -->
+      <section class="panel-card" id="section-team" style="display:none">
+        <div class="panel-header"><h3 class="panel-title">👥 Team Dashboard</h3></div>
+        <div id="team-metrics"><div class="empty-placeholder">Loading team metrics...</div></div>
+      </section>
+
+      <!-- ADMIN -->
+      <section class="panel-card" id="section-admin" style="display:none">
+        <div class="panel-header"><h3 class="panel-title">⚙️ User Management</h3><button class="btn btn-outline btn-sm" onclick="fetchPendingUsers()">Refresh</button></div>
+        <div id="pending-users-list"><div class="empty-placeholder">Loading...</div></div>
       </section>
 
     </main>
   </div>
 
-  <!-- Contact Modal -->
-  <div class="modal-overlay" id="contact-modal">
+  <!-- CSV Upload Modal -->
+  <div class="modal-overlay" id="upload-modal">
     <div class="modal-box">
-      <div class="panel-header" style="margin-bottom: 1.25rem;">
-        <h3 id="contact-modal-title" style="font-size: 1.2rem;">Add New Contact</h3>
-        <button class="btn btn-outline btn-sm" id="btn-close-contact-modal" style="padding: 0.2rem 0.5rem;">✕</button>
-      </div>
-
-      <form id="form-save-contact">
-        <input type="hidden" id="contact-id-input">
-        
-        <div class="form-group">
-          <label class="form-label" for="contact-name-input">Full Name</label>
-          <input type="text" id="contact-name-input" class="input-control" placeholder="e.g. Ali Ahmed" required>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="contact-phone-input">Phone Number (E.164 Format)</label>
-          <input type="tel" id="contact-phone-input" class="input-control" placeholder="+923001234567" required>
-        </div>
-
-        <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
-          <button type="submit" class="btn btn-primary" style="flex: 1;">Save Contact Record</button>
-        </div>
+      <div class="panel-header" style="margin-bottom:1.25rem"><h3>Upload Leads (CSV)</h3><button class="btn btn-outline btn-sm" onclick="closeModal('upload-modal')">✕</button></div>
+      <form id="form-upload-csv">
+        <div class="form-group"><label class="form-label">CSV File</label><input type="file" id="csv-file-input" accept=".csv" required></div>
+        <div class="form-group"><label class="form-label">Campaign (optional)</label><select id="upload-campaign" class="input-control"><option value="">None</option></select></div>
+        <div class="form-group"><label class="form-label">Assign To (optional)</label><select id="upload-assign" class="input-control"><option value="">Unassigned</option></select></div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1rem">Upload & Import</button>
       </form>
     </div>
   </div>
 
-  <!-- Toast Notification System -->
+  <!-- Campaign Modal -->
+  <div class="modal-overlay" id="campaign-modal">
+    <div class="modal-box">
+      <div class="panel-header" style="margin-bottom:1.25rem"><h3>Create Campaign</h3><button class="btn btn-outline btn-sm" onclick="closeModal('campaign-modal')">✕</button></div>
+      <form id="form-create-campaign">
+        <div class="form-group"><label class="form-label">Campaign Name</label><input type="text" id="campaign-name" class="input-control" required></div>
+        <div class="form-group"><label class="form-label">Description</label><textarea id="campaign-desc" class="input-control" rows="2"></textarea></div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1rem">Create Campaign</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Lead Detail Modal -->
+  <div class="modal-overlay" id="lead-detail-modal">
+    <div class="modal-box" style="max-width:600px">
+      <div class="panel-header" style="margin-bottom:1.25rem"><h3>Lead Details</h3><button class="btn btn-outline btn-sm" onclick="closeModal('lead-detail-modal')">✕</button></div>
+      <div id="lead-detail-content"></div>
+      <div id="lead-timeline" style="margin-top:1rem;max-height:300px;overflow-y:auto"></div>
+    </div>
+  </div>
+
   <div id="toast-container"></div>
 
   <script src="js/api.js"></script>

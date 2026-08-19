@@ -768,3 +768,72 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--text-muted);
   font-size: 0.9rem;
 }
+
+/* Outcome Panel */
+.outcome-panel {
+  background: rgba(7, 10, 18, 0.7);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+}
+
+.outcome-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.5rem;
+}
+
+/* Lead Detail Modal */
+#lead-detail-content {
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+#lead-timeline .contact-card-item {
+  padding: 0.6rem 0.85rem;
+}
+
+/* File input styling */
+input[type="file"] {
+  background: rgba(7, 10, 18, 0.7);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 0.5rem;
+  width: 100%;
+}
+
+/* Select styling */
+select.input-control {
+  background: rgba(7, 10, 18, 0.7);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 0.75rem 1rem;
+  font-family: var(--font-sans);
+  font-size: 0.925rem;
+  width: 100%;
+  outline: none;
+}
+
+select.input-control:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+/* Queue section titles */
+#queue-overdue h4,
+#queue-due-today h4,
+#queue-interested h4,
+#queue-new h4 {
+  margin-bottom: 0.5rem;
+}
+
+@media (max-width: 768px) {
+  .outcome-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .metrics-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
