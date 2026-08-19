@@ -18,13 +18,17 @@ const STORE_FILE = path.join(DATA_DIR, 'store.json');
 
 let store = { users: [], calls: [], messages: [], contacts: [] };
 
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!isMongoConnected()) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  } catch (e) {}
 }
 
 const loadStore = () => {
   try {
-    if (fs.existsSync(STORE_FILE)) {
+    if (fs.existsSync && fs.existsSync(STORE_FILE)) {
       const raw = fs.readFileSync(STORE_FILE, 'utf8');
       store = JSON.parse(raw);
       if (!store.users) store.users = [];
@@ -36,15 +40,16 @@ const loadStore = () => {
       saveStore();
     }
   } catch (err) {
-    console.error('[Zero-DB] Load error:', err.message);
+    // Vercel serverless - skip file load
   }
 };
 
 const saveStore = () => {
+  if (isMongoConnected()) return;
   try {
     fs.writeFileSync(STORE_FILE, JSON.stringify(store, null, 2), 'utf8');
   } catch (err) {
-    console.error('[Zero-DB] Save error:', err.message);
+    // Vercel serverless has no writable disk - ignore save errors
   }
 };
 

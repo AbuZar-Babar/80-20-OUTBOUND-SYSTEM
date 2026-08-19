@@ -1,12 +1,11 @@
 const multer = require('multer');
 const csv = require('csv-parser');
-const fs = require('fs');
-const path = require('path');
+const { Readable } = require('stream');
 const { LeadStore, CampaignStore, ActivityLogStore, UserStore } = require('../config/store');
 const { isMongoConnected } = require('../config/db');
 const Lead = require('../models/Lead');
 
-const upload = multer({ dest: path.join(__dirname, '../../data/uploads/') });
+const upload = multer({ storage: multer.memoryStorage() });
 
 const LEAD_STATUSES = ['new', 'no-answer', 'busy', 'voicemail', 'callback', 'send-info', 'interested', 'meeting-booked', 'not-interested', 'wrong-number', 'dnc', 'opted-out'];
 
@@ -47,18 +46,13 @@ const uploadLeads = async (req, res, next) => {
     const duplicates = [];
     const errors = [];
 
-    const filePath = req.file.path;
-
     await new Promise((resolve, reject) => {
+      const stream = Readable.from(req.file.buffer.toString());
       let headers = [];
-      fs.createReadStream(filePath)
-        .on('data', (row) => {
-          if (headers.length === 0) {
-            headers = Object.keys(row);
-            return;
-          }
-          results.push(row);
-        })
+      stream
+        .pipe(csv())
+        .on('headers', (h) => { headers = h; })
+        .on('data', (row) => { results.push(row); })
         .on('end', resolve)
         .on('error', reject);
     });
@@ -121,8 +115,6 @@ const uploadLeads = async (req, res, next) => {
 
       await LeadStore.create(leadData);
     }
-
-    try { fs.unlinkSync(filePath); } catch (e) {}
 
     res.status(201).json({
       success: true,
