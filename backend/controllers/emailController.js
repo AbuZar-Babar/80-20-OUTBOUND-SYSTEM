@@ -1,4 +1,16 @@
-const { LeadStore, ActivityLogStore } = require('../config/store');
+const { LeadStore, ActivityLogStore, ActivityLogStore: ALS } = require('../config/store');
+const { isMongoConnected } = require('../config/db');
+const ActivityLog = require('../models/ActivityLog');
+
+async function checkEmailDailyLimit(userId) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (isMongoConnected()) {
+    const count = await ActivityLog.countDocuments({ userId, action: 'email', timestamp: { $gte: today } });
+    return count;
+  }
+  return 0;
+}
 
 const sendEmail = async (req, res, next) => {
   try {
@@ -6,6 +18,12 @@ const sendEmail = async (req, res, next) => {
 
     if (!leadId || !subject || !body) {
       return res.status(400).json({ success: false, message: 'leadId, subject, and body are required.' });
+    }
+
+    const emailsToday = await checkEmailDailyLimit(req.user._id);
+    const limit = req.user.dailyEmailLimit || 50;
+    if (emailsToday >= limit) {
+      return res.status(429).json({ success: false, message: `Daily email limit reached (${limit}). Try again tomorrow.` });
     }
 
     const lead = await LeadStore.findById(leadId);

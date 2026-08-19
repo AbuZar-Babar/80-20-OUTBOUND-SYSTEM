@@ -81,6 +81,19 @@ const leadSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  currentlyBeingWorked: {
+    type: Boolean,
+    default: false
+  },
+  currentlyBeingWorkedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  currentlyBeingWorkedAt: {
+    type: Date,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now

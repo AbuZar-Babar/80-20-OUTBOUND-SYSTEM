@@ -209,6 +209,12 @@ const deleteLead = async (req, res, next) => {
 const getDailyQueue = async (req, res, next) => {
   try {
     const userId = req.user.role === 'salesperson' ? req.user._id : (req.query.userId || req.user._id);
+
+    const staleThreshold = new Date(Date.now() - 5 * 60 * 1000);
+    if (isMongoConnected()) {
+      await Lead.updateMany({ userId, currentlyBeingWorked: true, currentlyBeingWorkedAt: { $lt: staleThreshold } }, { currentlyBeingWorked: false, currentlyBeingWorkedBy: null, currentlyBeingWorkedAt: null });
+    }
+
     const queue = await LeadStore.findDailyQueue(userId);
     res.status(200).json({ success: true, data: queue });
   } catch (error) {
@@ -230,6 +236,12 @@ const workLead = async (req, res, next) => {
 
     const lead = await LeadStore.findById(leadId);
     if (!lead) return res.status(404).json({ success: false, message: 'Lead not found.' });
+
+    if (lead.currentlyBeingWorked && lead.currentlyBeingWorkedBy && lead.currentlyBeingWorkedBy.toString() !== req.user._id.toString()) {
+      return res.status(423).json({ success: false, message: 'This lead is currently being worked by another salesperson. Please wait.' });
+    }
+
+    await LeadStore.update(leadId, { currentlyBeingWorked: true, currentlyBeingWorkedBy: req.user._id, currentlyBeingWorkedAt: new Date() });
 
     const previousStatus = lead.status;
 
@@ -280,7 +292,7 @@ const workLead = async (req, res, next) => {
         updateData.nextAction = 'call';
     }
 
-    await LeadStore.update(leadId, updateData);
+    await LeadStore.update(leadId, { ...updateData, currentlyBeingWorked: false, currentlyBeingWorkedBy: null, currentlyBeingWorkedAt: null });
 
     await ActivityLogStore.create({
       leadId,

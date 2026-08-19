@@ -1,6 +1,7 @@
 const { EmailTemplateStore, LeadStore, ActivityLogStore } = require('../config/store');
 const { isMongoConnected } = require('../config/db');
 const EmailTemplate = require('../models/EmailTemplate');
+const ActivityLog = require('../models/ActivityLog');
 
 const MERGE_FIELD_REGEX = /\{\{(\w+)\}\}/g;
 
@@ -71,6 +72,17 @@ const sendTemplateEmail = async (req, res, next) => {
     const { leadId, templateId } = req.body;
     if (!leadId || !templateId) {
       return res.status(400).json({ success: false, message: 'leadId and templateId are required.' });
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let emailsToday = 0;
+    if (isMongoConnected()) {
+      emailsToday = await ActivityLog.countDocuments({ userId: req.user._id, action: 'email', timestamp: { $gte: today } });
+    }
+    const limit = req.user.dailyEmailLimit || 50;
+    if (emailsToday >= limit) {
+      return res.status(429).json({ success: false, message: `Daily email limit reached (${limit}). Try again tomorrow.` });
     }
 
     const lead = await LeadStore.findById(leadId);

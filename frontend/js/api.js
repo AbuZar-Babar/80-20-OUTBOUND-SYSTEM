@@ -82,6 +82,11 @@ const API = {
 
   getCampaigns: () => apiRequest('/campaigns', 'GET'),
   createCampaign: (data) => apiRequest('/campaigns', 'POST', data),
+  toggleCampaign: (id) => apiRequest(`/campaigns/${id}/toggle`, 'POST'),
+  exportCampaignLeads: (id) => {
+    const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    return fetch(`${API_BASE_URL}/campaigns/${id}/export`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.blob());
+  },
   deleteCampaign: (id) => apiRequest(`/campaigns/${id}`, 'DELETE'),
 
   sendEmail: (data) => apiRequest('/email/send', 'POST', data),

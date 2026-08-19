@@ -112,6 +112,9 @@ const getMe = async (req, res, next) => {
         email: req.user.email,
         role: req.user.role,
         approved: req.user.approved,
+        timezone: req.user.timezone,
+        dailyLeadTarget: req.user.dailyLeadTarget,
+        dailyEmailLimit: req.user.dailyEmailLimit,
         createdAt: req.user.createdAt
       }
     });

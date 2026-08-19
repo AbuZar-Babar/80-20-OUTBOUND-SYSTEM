@@ -379,6 +379,21 @@ function showEmailTab(tab) {
   document.getElementById('email-compose-tab').style.display = tab === 'compose' ? 'block' : 'none';
   document.getElementById('email-templates-tab').style.display = tab === 'templates' ? 'block' : 'none';
   if (tab === 'templates') fetchTemplates();
+  if (tab === 'compose') updateEmailLimitInfo();
+}
+
+async function updateEmailLimitInfo() {
+  try {
+    const ss = await API.getSessionStats().catch(() => null);
+    const el = document.getElementById('email-limit-info');
+    if (!el) return;
+    if (currentUser && currentUser.dailyEmailLimit) {
+      const sentToday = ss?.data?.emailsToday || 0;
+      const limit = currentUser.dailyEmailLimit;
+      el.textContent = `${sentToday}/${limit} emails sent today`;
+      if (sentToday >= limit) el.style.color = 'var(--accent-rose)';
+    }
+  } catch (e) {}
 }
 
 function initTemplateActions() {
@@ -573,13 +588,38 @@ async function fetchCampaigns() {
     container.innerHTML = res.data.map(c => `
       <div class="contact-card-item">
         <div><div style="font-weight:600">${escapeHtml(c.name)}</div><div style="font-size:0.8rem;color:var(--text-muted)">${c.description || 'No description'}</div></div>
-        <div style="display:flex;gap:0.4rem"><span class="badge badge-${c.status === 'active' ? 'completed' : 'queued'}">${c.status}</span>
-        <button class="btn btn-sm btn-rose" onclick="deleteCampaign('${c._id}')">🗑️</button></div>
+        <div style="display:flex;gap:0.4rem;align-items:center">
+          <span class="badge badge-${c.status === 'active' ? 'completed' : 'queued'}">${c.status}</span>
+          <button class="btn btn-sm btn-outline" onclick="toggleCampaign('${c._id}')" title="${c.status === 'active' ? 'Pause' : 'Resume'}">${c.status === 'active' ? '⏸️' : '▶️'}</button>
+          <button class="btn btn-sm btn-outline" onclick="exportCampaignLeads('${c._id}')" title="Export CSV">📥</button>
+          <button class="btn btn-sm btn-rose" onclick="deleteCampaign('${c._id}')">🗑️</button>
+        </div>
       </div>`).join('');
   } catch (err) { console.error('Campaigns error:', err); }
 }
 
 function showCampaignModal() { document.getElementById('campaign-modal').classList.add('show'); }
+
+async function toggleCampaign(id) {
+  try {
+    await API.toggleCampaign(id);
+    showToast('Campaign status toggled!', 'success');
+    fetchCampaigns();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function exportCampaignLeads(id) {
+  try {
+    const blob = await API.exportCampaignLeads(id);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `campaign-${id}-leads.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('CSV exported!', 'success');
+  } catch (err) { showToast(err.message, 'error'); }
+}
 
 async function deleteCampaign(id) {
   if (!confirm('Delete this campaign?')) return;

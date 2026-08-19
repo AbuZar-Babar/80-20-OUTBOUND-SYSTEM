@@ -36,6 +36,10 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 50
   },
+  dailyEmailLimit: {
+    type: Number,
+    default: 50
+  },
   active: {
     type: Boolean,
     default: true
