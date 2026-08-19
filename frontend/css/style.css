@@ -106,6 +106,7 @@ h1, h2, h3, h4, h5, h6 {
   position: fixed;
   height: 100vh;
   z-index: 100;
+  overflow: hidden;
 }
 
 .brand-header {
@@ -149,6 +150,26 @@ h1, h2, h3, h4, h5, h6 {
   flex-direction: column;
   gap: 0.4rem;
   list-style: none;
+}
+
+.app-sidebar nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.app-sidebar nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+.app-sidebar nav::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+  border-radius: 4px;
+}
+
+.app-sidebar nav::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .nav-item {
