@@ -40,6 +40,12 @@ async function loadUserProfile() {
     document.getElementById('user-name-display').textContent = user.name;
     document.getElementById('user-email-display').textContent = user.email;
     document.getElementById('user-avatar-initial').textContent = user.name.charAt(0).toUpperCase();
+
+    if (user.role === 'admin') {
+      document.getElementById('nav-admin').style.display = 'flex';
+      document.getElementById('section-admin').style.display = 'flex';
+      fetchPendingUsers();
+    }
   } catch (err) {
     console.error('Profile fetch error:', err);
   }
@@ -464,4 +470,59 @@ function playRecording(url) {
     showToast('Could not play recording. It may still be processing.', 'error');
   });
   showToast('Playing recording...', 'info');
+}
+
+async function fetchPendingUsers() {
+  try {
+    const res = await API.getPendingUsers();
+    const users = res.data;
+    const container = document.getElementById('pending-users-list');
+
+    if (!container) return;
+
+    if (users.length === 0) {
+      container.innerHTML = `<div class="empty-placeholder">No pending user approvals.</div>`;
+      return;
+    }
+
+    container.innerHTML = users.map(user => `
+      <div class="contact-card-item">
+        <div style="display: flex; align-items: center; gap: 0.85rem;">
+          <div class="avatar-initial">${user.name.charAt(0).toUpperCase()}</div>
+          <div>
+            <div style="font-weight: 600; font-size: 0.95rem;">${escapeHtml(user.name)}</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">${user.email}</div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 0.4rem;">
+          <button class="btn btn-sm btn-emerald" onclick="approveUser('${user._id}')">Approve</button>
+          <button class="btn btn-sm btn-rose" onclick="rejectUser('${user._id}')">Reject</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    console.error('Pending users fetch error:', err);
+  }
+}
+
+async function approveUser(id) {
+  try {
+    await API.approveUser(id);
+    showToast('User approved.', 'success');
+    await fetchPendingUsers();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function rejectUser(id) {
+  if (confirm('Are you sure you want to reject this user?')) {
+    try {
+      await API.rejectUser(id);
+      showToast('User rejected.', 'info');
+      await fetchPendingUsers();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
 }

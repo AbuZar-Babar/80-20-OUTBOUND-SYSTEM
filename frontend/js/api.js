@@ -96,5 +96,11 @@ const API = {
   getContacts: () => apiRequest('/contacts', 'GET'),
   createContact: (name, phone) => apiRequest('/contacts', 'POST', { name, phone }),
   updateContact: (id, name, phone) => apiRequest(`/contacts/${id}`, 'PUT', { name, phone }),
-  deleteContact: (id) => apiRequest(`/contacts/${id}`, 'DELETE')
+  deleteContact: (id) => apiRequest(`/contacts/${id}`, 'DELETE'),
+
+  // Admin
+  getPendingUsers: () => apiRequest('/admin/users/pending', 'GET'),
+  getAllUsers: () => apiRequest('/admin/users', 'GET'),
+  approveUser: (id) => apiRequest(`/admin/users/${id}/approve`, 'POST'),
+  rejectUser: (id) => apiRequest(`/admin/users/${id}/reject`, 'DELETE')
 };

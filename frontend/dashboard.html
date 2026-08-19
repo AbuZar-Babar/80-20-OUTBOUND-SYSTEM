@@ -38,6 +38,9 @@
           <li class="nav-item" data-section="logs">
             <span class="nav-item-icon">📋</span> Activity Logs
           </li>
+          <li class="nav-item" data-section="admin" id="nav-admin" style="display: none;">
+            <span class="nav-item-icon">👥</span> User Approvals
+          </li>
         </ul>
       </nav>
 
@@ -218,8 +221,8 @@
       <!-- Call History Table -->
       <section class="panel-card" id="section-logs">
         <div class="panel-header">
-          <h3 class="panel-title">📋 Full Call Activity Logs</h3>
-          <button class="btn btn-outline btn-sm" onclick="fetchCallHistory()">🔄 Refresh Logs</button>
+          <h3 class="panel-title">Full Call Activity Logs</h3>
+          <button class="btn btn-outline btn-sm" onclick="fetchCallHistory()">Refresh Logs</button>
         </div>
 
         <div class="table-wrapper">
@@ -239,6 +242,18 @@
               </tr>
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <!-- Admin Panel -->
+      <section class="panel-card" id="section-admin" style="display: none;">
+        <div class="panel-header">
+          <h3 class="panel-title">Admin - User Management</h3>
+          <button class="btn btn-outline btn-sm" onclick="fetchPendingUsers()">Refresh</button>
+        </div>
+
+        <div id="pending-users-list">
+          <div class="empty-placeholder">Loading pending users...</div>
         </div>
       </section>
 

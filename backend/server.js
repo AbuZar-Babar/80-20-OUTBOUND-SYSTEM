@@ -13,6 +13,7 @@ const authRoutes = require('./routes/authRoutes');
 const callRoutes = require('./routes/callRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const contactRoutes = require('./routes/contactRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/calls', callRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/contacts', contactRoutes);
+app.use('/api/admin', adminRoutes);
 
 const frontendPath = path.join(__dirname, '../frontend');
 app.use(express.static(frontendPath));

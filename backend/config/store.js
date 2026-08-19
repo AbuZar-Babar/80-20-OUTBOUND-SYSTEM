@@ -71,9 +71,15 @@ const UserStore = {
     return userWithoutPassword;
   },
 
-  async create({ name, email, password }) {
+  async create({ name, email, password, role, approved }) {
     if (isMongoConnected()) {
-      const user = await User.create({ name, email: email.toLowerCase(), password });
+      const user = await User.create({
+        name,
+        email: email.toLowerCase(),
+        password,
+        role: role || 'user',
+        approved: approved !== undefined ? approved : false
+      });
       const { password: _, ...rest } = user.toObject();
       return rest;
     }
@@ -85,6 +91,8 @@ const UserStore = {
       name: name.trim(),
       email: email.toLowerCase().trim(),
       password: hashedPassword,
+      role: role || 'user',
+      approved: approved !== undefined ? approved : false,
       createdAt: new Date().toISOString()
     };
     store.users.push(newUser);
@@ -95,6 +103,46 @@ const UserStore = {
 
   async matchPassword(enteredPassword, hashedPassword) {
     return await bcrypt.compare(enteredPassword, hashedPassword);
+  },
+
+  async findPendingUsers() {
+    if (isMongoConnected()) {
+      return await User.find({ approved: false }).select('-password').lean();
+    }
+    return store.users
+      .filter(u => u.approved === false)
+      .map(({ password, ...rest }) => rest);
+  },
+
+  async findAllUsers() {
+    if (isMongoConnected()) {
+      return await User.find().select('-password').lean();
+    }
+    return store.users.map(({ password, ...rest }) => rest);
+  },
+
+  async approveUser(id) {
+    if (isMongoConnected()) {
+      return await User.findByIdAndUpdate(id, { approved: true }, { new: true }).select('-password').lean();
+    }
+    const user = store.users.find(u => u._id === id);
+    if (!user) return null;
+    user.approved = true;
+    saveStore();
+    const { password, ...rest } = user;
+    return rest;
+  },
+
+  async rejectUser(id) {
+    if (isMongoConnected()) {
+      await User.findByIdAndDelete(id);
+      return true;
+    }
+    const initialLength = store.users.length;
+    store.users = store.users.filter(u => u._id !== id);
+    const deleted = store.users.length < initialLength;
+    if (deleted) saveStore();
+    return deleted;
   }
 };
 

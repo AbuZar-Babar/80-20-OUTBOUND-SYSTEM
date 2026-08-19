@@ -23,10 +23,15 @@ const registerUser = async (req, res, next) => {
       });
     }
 
+    const allUsers = await UserStore.findAllUsers();
+    const isFirstUser = allUsers.length === 0;
+
     const user = await UserStore.create({
       name,
       email: email.toLowerCase(),
-      password
+      password,
+      role: isFirstUser ? 'admin' : 'user',
+      approved: isFirstUser
     });
 
     res.status(201).json({
@@ -71,6 +76,13 @@ const loginUser = async (req, res, next) => {
       return res.status(401).json({
         success: false,
         message: 'Incorrect password. Access denied.'
+      });
+    }
+
+    if (!user.approved) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account is pending admin approval. Please wait for approval before logging in.'
       });
     }
 
