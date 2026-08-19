@@ -110,6 +110,8 @@ const getMe = async (req, res, next) => {
         _id: req.user._id,
         name: req.user.name,
         email: req.user.email,
+        role: req.user.role,
+        approved: req.user.approved,
         createdAt: req.user.createdAt
       }
     });
