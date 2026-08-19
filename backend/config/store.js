@@ -11,6 +11,8 @@ const Contact = require('../models/Contact');
 const Lead = require('../models/Lead');
 const Campaign = require('../models/Campaign');
 const ActivityLog = require('../models/ActivityLog');
+const EmailTemplate = require('../models/EmailTemplate');
+const LoginSession = require('../models/LoginSession');
 
 // Zero-DB local persistence
 const DATA_DIR = path.join(__dirname, '../../data');
@@ -547,4 +549,79 @@ const ActivityLogStore = {
 // Initialize Zero-DB on load
 loadStore();
 
-module.exports = { UserStore, CallStore, MessageStore, ContactStore, LeadStore, CampaignStore, ActivityLogStore };
+// --- EmailTemplate Operations ---
+const EmailTemplateStore = {
+  async create(data) {
+    if (isMongoConnected()) return await EmailTemplate.create(data);
+    if (!store.emailTemplates) store.emailTemplates = [];
+    const tpl = { _id: generateId(), ...data, createdAt: new Date().toISOString() };
+    store.emailTemplates.push(tpl);
+    saveStore();
+    return tpl;
+  },
+  async findAll() {
+    if (isMongoConnected()) return await EmailTemplate.find({ active: true }).sort({ createdAt: -1 }).lean();
+    if (!store.emailTemplates) return [];
+    return store.emailTemplates.filter(t => t.active !== false);
+  },
+  async findById(id) {
+    if (isMongoConnected()) return await EmailTemplate.findById(id).lean();
+    if (!store.emailTemplates) return null;
+    return store.emailTemplates.find(t => t._id === id) || null;
+  },
+  async update(id, data) {
+    if (isMongoConnected()) return await EmailTemplate.findByIdAndUpdate(id, data, { new: true }).lean();
+    if (!store.emailTemplates) return null;
+    const idx = store.emailTemplates.findIndex(t => t._id === id);
+    if (idx === -1) return null;
+    store.emailTemplates[idx] = { ...store.emailTemplates[idx], ...data };
+    saveStore();
+    return store.emailTemplates[idx];
+  },
+  async delete(id) {
+    if (isMongoConnected()) { await EmailTemplate.findByIdAndDelete(id); return true; }
+    if (!store.emailTemplates) return false;
+    const len = store.emailTemplates.length;
+    store.emailTemplates = store.emailTemplates.filter(t => t._id !== id);
+    if (store.emailTemplates.length < len) { saveStore(); return true; }
+    return false;
+  }
+};
+
+// --- LoginSession Operations ---
+const LoginSessionStore = {
+  async create(data) {
+    if (isMongoConnected()) return await LoginSession.create(data);
+    if (!store.loginSessions) store.loginSessions = [];
+    const session = { _id: generateId(), ...data, loginAt: new Date().toISOString() };
+    store.loginSessions.push(session);
+    saveStore();
+    return session;
+  },
+  async findToday(userId) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (isMongoConnected()) return await LoginSession.findOne({ userId, date: today }).lean();
+    if (!store.loginSessions) return null;
+    return store.loginSessions.find(s => s.userId === userId && s.date === today) || null;
+  },
+  async updateSession(id, data) {
+    if (isMongoConnected()) return await LoginSession.findByIdAndUpdate(id, data, { new: true }).lean();
+    if (!store.loginSessions) return null;
+    const idx = store.loginSessions.findIndex(s => s._id === id);
+    if (idx === -1) return null;
+    store.loginSessions[idx] = { ...store.loginSessions[idx], ...data };
+    saveStore();
+    return store.loginSessions[idx];
+  },
+  async getUserStats(userId) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (isMongoConnected()) {
+      const session = await LoginSession.findOne({ userId, date: today }).lean();
+      return { activeTimeSeconds: session?.activeTimeSeconds || 0, dialingTimeSeconds: session?.dialingTimeSeconds || 0 };
+    }
+    const session = await this.findToday(userId);
+    return { activeTimeSeconds: session?.activeTimeSeconds || 0, dialingTimeSeconds: session?.dialingTimeSeconds || 0 };
+  }
+};
+
+module.exports = { UserStore, CallStore, MessageStore, ContactStore, LeadStore, CampaignStore, ActivityLogStore, EmailTemplateStore, LoginSessionStore };

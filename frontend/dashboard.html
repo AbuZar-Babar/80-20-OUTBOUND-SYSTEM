@@ -70,6 +70,12 @@
           <div class="metric-card"><div class="metric-data"><span>SMS Today</span><div class="metric-value" id="m-sms-today">0</div></div><div class="metric-icon icon-emerald">💬</div></div>
           <div class="metric-card"><div class="metric-data"><span>Overdue Callbacks</span><div class="metric-value" id="m-overdue" style="color: var(--accent-rose);">0</div></div><div class="metric-icon icon-rose">⚠️</div></div>
         </div>
+        <div class="metrics-row">
+          <div class="metric-card"><div class="metric-data"><span>Daily Target</span><div class="metric-value" id="m-target-progress">--</div></div><div class="metric-icon icon-indigo">🎯</div></div>
+          <div class="metric-card"><div class="metric-data"><span>Active Time</span><div class="metric-value" id="m-active-time">00:00</div></div><div class="metric-icon icon-cyan">⏱️</div></div>
+          <div class="metric-card"><div class="metric-data"><span>Dialing Time</span><div class="metric-value" id="m-dialing-time">00:00</div></div><div class="metric-icon icon-emerald">📞</div></div>
+          <div class="metric-card" style="opacity:0.3"><div class="metric-data"><span>Future</span><div class="metric-value">—</div></div><div class="metric-icon icon-rose">🔮</div></div>
+        </div>
       </section>
 
       <!-- DAILY QUEUE -->
@@ -157,13 +163,25 @@
       <!-- EMAIL -->
       <section class="panel-card" id="section-email" style="display:none">
         <div class="panel-header"><h3 class="panel-title">✉️ Email Station</h3></div>
-        <form id="form-send-email">
-          <div class="form-group"><label class="form-label">Lead ID</label><input type="text" id="email-lead-id" class="input-control" placeholder="Lead ID" required></div>
-          <div class="form-group"><label class="form-label">To Email</label><input type="email" id="email-to" class="input-control" placeholder="lead@example.com" required></div>
-          <div class="form-group"><label class="form-label">Subject</label><input type="text" id="email-subject" class="input-control" placeholder="Email subject" required></div>
-          <div class="form-group" style="flex:1"><label class="form-label">Body (HTML supported)</label><textarea id="email-body" class="input-control" rows="6" required style="resize:vertical;min-height:150px;margin-top:0.4rem"></textarea></div>
-          <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1rem;padding:0.85rem">✉️ SEND EMAIL</button>
-        </form>
+        <div class="tab-bar" style="margin-bottom:1rem">
+          <button class="tab-btn active" onclick="showEmailTab('compose')">Compose</button>
+          <button class="tab-btn" onclick="showEmailTab('templates')">Templates</button>
+        </div>
+        <div id="email-compose-tab">
+          <form id="form-send-email">
+            <div class="form-group"><label class="form-label">Lead ID</label><input type="text" id="email-lead-id" class="input-control" placeholder="Lead ID" required></div>
+            <div class="form-group"><label class="form-label">To Email</label><input type="email" id="email-to" class="input-control" placeholder="lead@example.com" required></div>
+            <div class="form-group"><label class="form-label">Subject</label><input type="text" id="email-subject" class="input-control" placeholder="Email subject" required></div>
+            <div class="form-group" style="flex:1"><label class="form-label">Body (HTML supported)</label><textarea id="email-body" class="input-control" rows="6" required style="resize:vertical;min-height:150px;margin-top:0.4rem"></textarea></div>
+            <div class="form-group"><label class="form-label">Use Template (optional)</label><select id="email-template-select" class="input-control" onchange="applyEmailTemplate()"><option value="">No template</option></select></div>
+            <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1rem;padding:0.85rem">✉️ SEND EMAIL</button>
+          </form>
+        </div>
+        <div id="email-templates-tab" style="display:none">
+          <div class="panel-header"><h3 class="panel-title" style="font-size:1rem">Email Templates</h3><button class="btn btn-primary btn-sm" onclick="showTemplateModal()">+ New Template</button></div>
+          <div id="templates-list"><div class="empty-placeholder">Loading templates...</div></div>
+          <div style="margin-top:0.75rem;font-size:0.75rem;color:var(--text-muted)">Merge fields: {{name}}, {{first_name}}, {{company}}, {{position}}, {{city}}, {{country}}, {{phone}}, {{email}}, {{website}}, {{niche}}</div>
+        </div>
       </section>
 
       <!-- ALL LEADS -->
@@ -246,7 +264,35 @@
     <div class="modal-box" style="max-width:600px">
       <div class="panel-header" style="margin-bottom:1.25rem"><h3>Lead Details</h3><button class="btn btn-outline btn-sm" onclick="closeModal('lead-detail-modal')">✕</button></div>
       <div id="lead-detail-content"></div>
+      <div style="margin-top:1rem;display:flex;gap:0.5rem">
+        <button class="btn btn-outline btn-sm" onclick="showReassignModal()">Reassign</button>
+        <button class="btn btn-outline btn-sm" onclick="checkLeadContactHours()">Check Hours</button>
+      </div>
+      <div id="contact-hours-result" style="margin-top:0.5rem"></div>
       <div id="lead-timeline" style="margin-top:1rem;max-height:300px;overflow-y:auto"></div>
+    </div>
+  </div>
+
+  <!-- Reassign Modal -->
+  <div class="modal-overlay" id="reassign-modal">
+    <div class="modal-box" style="max-width:400px">
+      <div class="panel-header" style="margin-bottom:1.25rem"><h3>Reassign Lead</h3><button class="btn btn-outline btn-sm" onclick="closeModal('reassign-modal')">✕</button></div>
+      <div class="form-group"><label class="form-label">Assign To</label><select id="reassign-user-select" class="input-control"><option value="">Select user...</option></select></div>
+      <button class="btn btn-primary" style="width:100%;margin-top:1rem" onclick="submitReassign()">Reassign</button>
+    </div>
+  </div>
+
+  <!-- Template Modal -->
+  <div class="modal-overlay" id="template-modal">
+    <div class="modal-box" style="max-width:550px">
+      <div class="panel-header" style="margin-bottom:1.25rem"><h3>Create Email Template</h3><button class="btn btn-outline btn-sm" onclick="closeModal('template-modal')">✕</button></div>
+      <form id="form-create-template">
+        <div class="form-group"><label class="form-label">Template Name</label><input type="text" id="tpl-name" class="input-control" required></div>
+        <div class="form-group"><label class="form-label">Category</label><select id="tpl-category" class="input-control"><option value="cold-outreach">Cold Outreach</option><option value="follow-up">Follow Up</option><option value="booking">Booking</option><option value="general">General</option></select></div>
+        <div class="form-group"><label class="form-label">Subject</label><input type="text" id="tpl-subject" class="input-control" placeholder="Hello {{first_name}}" required></div>
+        <div class="form-group"><label class="form-label">Body (HTML, use {{field}} for merge)</label><textarea id="tpl-body" class="input-control" rows="8" required style="resize:vertical;min-height:180px"></textarea></div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1rem">Save Template</button>
+      </form>
     </div>
   </div>
 

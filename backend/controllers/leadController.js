@@ -9,6 +9,27 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const LEAD_STATUSES = ['new', 'no-answer', 'busy', 'voicemail', 'callback', 'send-info', 'interested', 'meeting-booked', 'not-interested', 'wrong-number', 'dnc', 'opted-out'];
 
+const AUTO_RETRY_DELAYS = {
+  'no-answer': 60 * 60 * 1000,
+  'busy': 30 * 60 * 1000,
+  'voicemail': 2 * 60 * 60 * 1000
+};
+
+function isWithinContactHours(timezone) {
+  try {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone || 'UTC',
+      hour: 'numeric',
+      hour12: false
+    });
+    const hour = parseInt(formatter.format(now));
+    return hour >= 8 && hour < 18;
+  } catch {
+    return true;
+  }
+}
+
 const CSV_COLUMN_MAP = {
   name: ['name', 'full_name', 'fullname', 'contact_name', 'contactname'],
   phone: ['phone', 'phone_number', 'phonenumber', 'mobile', 'cell', 'telephone'],
@@ -229,6 +250,8 @@ const workLead = async (req, res, next) => {
       case 'busy':
       case 'voicemail':
         updateData.nextAction = 'retry';
+        updateData.callbackDate = new Date(Date.now() + (AUTO_RETRY_DELAYS[outcome] || 60 * 60 * 1000));
+        updateData.callbackNote = `Auto-retry scheduled: ${outcome}`;
         break;
       case 'send-info':
         updateData.nextAction = 'send-email';
@@ -384,4 +407,59 @@ const suppressLead = async (req, res, next) => {
   }
 };
 
-module.exports = { upload, uploadLeads, getLeads, getLeadById, updateLead, deleteLead, getDailyQueue, workLead, assignLeads, bulkAssign, addNote, bookLead, suppressLead };
+const reassignLead = async (req, res, next) => {
+  try {
+    const { leadId, userId } = req.body;
+    if (!leadId || !userId) return res.status(400).json({ success: false, message: 'leadId and userId are required.' });
+
+    const lead = await LeadStore.findById(leadId);
+    if (!lead) return res.status(404).json({ success: false, message: 'Lead not found.' });
+
+    const user = await UserStore.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+
+    const previousUserId = lead.userId;
+    await LeadStore.update(leadId, { userId, 'assignment.dateAssigned': new Date() });
+
+    await ActivityLogStore.create({
+      leadId,
+      userId: req.user._id,
+      action: 'reassign',
+      notes: `Reassigned from ${previousUserId || 'unassigned'} to ${user.name}`
+    });
+
+    res.status(200).json({ success: true, message: `Lead reassigned to ${user.name}.` });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const checkContactHours = async (req, res, next) => {
+  try {
+    const { leadId } = req.query;
+    if (!leadId) return res.status(400).json({ success: false, message: 'leadId required.' });
+
+    const lead = await LeadStore.findById(leadId);
+    if (!lead) return res.status(404).json({ success: false, message: 'Lead not found.' });
+
+    const tz = lead.geography?.timezone || 'UTC';
+    const withinHours = isWithinContactHours(tz);
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true });
+    const localTime = formatter.format(now);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        withinHours,
+        timezone: tz,
+        localTime,
+        message: withinHours ? `OK to contact (${localTime} ${tz})` : `Outside contact hours (${localTime} ${tz}). Allowed: 8:00 AM - 6:00 PM`
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { upload, uploadLeads, getLeads, getLeadById, updateLead, deleteLead, getDailyQueue, workLead, assignLeads, bulkAssign, addNote, bookLead, suppressLead, reassignLead, checkContactHours };

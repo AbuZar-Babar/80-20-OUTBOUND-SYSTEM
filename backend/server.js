@@ -18,6 +18,7 @@ const leadRoutes = require('./routes/leadRoutes');
 const emailRoutes = require('./routes/emailRoutes');
 const managerRoutes = require('./routes/managerRoutes');
 const campaignRoutes = require('./routes/campaignRoutes');
+const sessionRoutes = require('./routes/sessionRoutes');
 
 const app = express();
 
@@ -42,6 +43,7 @@ app.use('/api/leads', leadRoutes);
 app.use('/api/email', emailRoutes);
 app.use('/api/manager', managerRoutes);
 app.use('/api/campaigns', campaignRoutes);
+app.use('/api/session', sessionRoutes);
 
 const frontendPath = path.join(__dirname, '../frontend');
 app.use(express.static(frontendPath));

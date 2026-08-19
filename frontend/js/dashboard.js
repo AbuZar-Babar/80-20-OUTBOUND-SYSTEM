@@ -3,6 +3,7 @@ let secondsElapsed = 0;
 let currentLeadId = null;
 let currentUser = null;
 let currentOutcome = null;
+let heartbeatInterval = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   const token = sessionStorage.getItem('token') || localStorage.getItem('token');
@@ -16,8 +17,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   initEmailActions();
   initUploadActions();
   initCampaignActions();
+  initTemplateActions();
   await refreshDashboard();
   setInterval(refreshDashboard, 30000);
+
+  try { await API.recordLogin(); } catch (e) {}
+  heartbeatInterval = setInterval(() => { API.heartbeat().catch(() => {}); }, 60000);
 });
 
 async function loadUserProfile() {
@@ -85,6 +90,24 @@ async function refreshDashboard() {
     document.getElementById('m-emails-today').textContent = m.emailsToday || 0;
     document.getElementById('m-sms-today').textContent = m.smsToday || 0;
     document.getElementById('m-overdue').textContent = m.callbacksOverdue || 0;
+
+    if (currentUser && currentUser.dailyLeadTarget) {
+      const target = currentUser.dailyLeadTarget;
+      const callsToday = m.callsToday || 0;
+      const pct = target > 0 ? Math.min(100, Math.round((callsToday / target) * 100)) : 0;
+      const el = document.getElementById('m-target-progress');
+      if (el) el.innerHTML = `<span>${callsToday}/${target}</span><div style="width:100%;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin-top:4px"><div style="height:100%;width:${pct}%;background:${pct >= 100 ? 'var(--accent-emerald)' : 'var(--accent-primary)'};border-radius:2px"></div></div>`;
+    }
+
+    if (currentUser && (currentUser.role === 'salesperson')) {
+      const ss = await API.getSessionStats().catch(() => null);
+      if (ss && ss.data) {
+        const atEl = document.getElementById('m-active-time');
+        const dtEl = document.getElementById('m-dialing-time');
+        if (atEl) atEl.textContent = formatSeconds(ss.data.activeTimeSeconds || 0);
+        if (dtEl) dtEl.textContent = formatSeconds(ss.data.dialingTimeSeconds || 0);
+      }
+    }
 
     const alertsRes = await API.getAlerts();
     if (alertsRes.data && alertsRes.data.length > 0) {
@@ -242,6 +265,9 @@ function startCallTimer() {
 
 function stopCallTimer() {
   if (callTimerInterval) { clearInterval(callTimerInterval); callTimerInterval = null; }
+  if (secondsElapsed > 0) {
+    API.updateDialingTime(secondsElapsed).catch(() => {});
+  }
 }
 
 function setOutcome(outcome) {
@@ -345,6 +371,123 @@ function initEmailActions() {
       refreshDashboard();
     } catch (err) { showToast(err.message, 'error'); }
   });
+}
+
+function showEmailTab(tab) {
+  document.querySelectorAll('#section-email .tab-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('email-compose-tab').style.display = tab === 'compose' ? 'block' : 'none';
+  document.getElementById('email-templates-tab').style.display = tab === 'templates' ? 'block' : 'none';
+  if (tab === 'templates') fetchTemplates();
+}
+
+function initTemplateActions() {
+  const form = document.getElementById('form-create-template');
+  if (form) form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await API.createTemplate({
+        name: document.getElementById('tpl-name').value.trim(),
+        subject: document.getElementById('tpl-subject').value.trim(),
+        body: document.getElementById('tpl-body').value.trim(),
+        category: document.getElementById('tpl-category').value
+      });
+      showToast('Template created!', 'success');
+      closeModal('template-modal');
+      fetchTemplates();
+    } catch (err) { showToast(err.message, 'error'); }
+  });
+}
+
+async function fetchTemplates() {
+  try {
+    const res = await API.getTemplates();
+    const container = document.getElementById('templates-list');
+    const select = document.getElementById('email-template-select');
+    if (!res.data || res.data.length === 0) {
+      container.innerHTML = '<div class="empty-placeholder">No templates yet.</div>';
+      return;
+    }
+    container.innerHTML = res.data.map(t => `
+      <div class="contact-card-item">
+        <div style="flex:1"><div style="font-weight:600">${escapeHtml(t.name)}</div>
+        <div style="font-size:0.75rem;color:var(--text-muted)">${t.category} ${t.mergeFields?.length ? '| Fields: ' + t.mergeFields.join(', ') : ''}</div></div>
+        <div style="display:flex;gap:0.4rem">
+          <button class="btn btn-sm btn-outline" onclick="useTemplate('${t._id}','${escapeHtml(t.subject)}','${escapeHtml(t.body).replace(/'/g, "\\'")}')">Use</button>
+          <button class="btn btn-sm btn-rose" onclick="deleteTemplate('${t._id}')">🗑️</button>
+        </div>
+      </div>`).join('');
+
+    if (select) {
+      select.innerHTML = '<option value="">No template</option>' + res.data.map(t => `<option value="${t._id}">${escapeHtml(t.name)}</option>`).join('');
+    }
+  } catch (err) { console.error('Templates error:', err); }
+}
+
+function applyEmailTemplate() {
+  const select = document.getElementById('email-template-select');
+  const tplId = select?.value;
+  if (!tplId) return;
+  API.getTemplates().then(res => {
+    const tpl = res.data.find(t => t._id === tplId);
+    if (tpl) {
+      document.getElementById('email-subject').value = tpl.subject;
+      document.getElementById('email-body').value = tpl.body;
+    }
+  });
+}
+
+function useTemplate(id, subject, body) {
+  document.getElementById('email-lead-id').value = currentLeadId || '';
+  document.getElementById('email-subject').value = subject;
+  document.getElementById('email-body').value = body;
+  showEmailTab('compose');
+  document.querySelectorAll('#section-email .tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#section-email .tab-btn')[0].classList.add('active');
+}
+
+async function deleteTemplate(id) {
+  if (!confirm('Delete template?')) return;
+  try { await API.deleteTemplate(id); showToast('Deleted.', 'info'); fetchTemplates(); } catch (err) { showToast(err.message, 'error'); }
+}
+
+function showTemplateModal() { document.getElementById('template-modal').classList.add('show'); }
+
+/* ======================== REASSIGN ======================== */
+function showReassignModal() {
+  if (!currentLeadId) { showToast('No lead selected.', 'error'); return; }
+  API.getAllUsers().then(res => {
+    const select = document.getElementById('reassign-user-select');
+    select.innerHTML = '<option value="">Select user...</option>' +
+      (res.data || []).filter(u => u.role === 'salesperson' && u.approved).map(u =>
+        `<option value="${u._id}">${escapeHtml(u.name)} (${u.email})</option>`
+      ).join('');
+  });
+  document.getElementById('reassign-modal').classList.add('show');
+}
+
+async function submitReassign() {
+  const userId = document.getElementById('reassign-user-select').value;
+  if (!userId) { showToast('Select a user.', 'error'); return; }
+  try {
+    await API.reassignLead(currentLeadId, userId);
+    showToast('Lead reassigned!', 'success');
+    closeModal('reassign-modal');
+    refreshDashboard();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+/* ======================== CONTACT HOURS ======================== */
+async function checkLeadContactHours() {
+  if (!currentLeadId) { showToast('No lead selected.', 'error'); return; }
+  try {
+    const res = await API.checkContactHours(currentLeadId);
+    const d = res.data;
+    document.getElementById('contact-hours-result').innerHTML = `
+      <div style="padding:0.5rem 0.75rem;border-radius:6px;font-size:0.85rem;background:${d.withinHours ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.15)'};color:${d.withinHours ? 'var(--accent-emerald)' : 'var(--accent-rose)'}">
+        ${d.withinHours ? '✅' : '⛔'} ${escapeHtml(d.message)}
+      </div>`;
+  } catch (err) { showToast(err.message, 'error'); }
 }
 
 /* ======================== LEADS ======================== */

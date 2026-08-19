@@ -1,4 +1,4 @@
-const { UserStore, LeadStore, ActivityLogStore, CallStore, MessageStore } = require('../config/store');
+const { UserStore, LeadStore, ActivityLogStore, CallStore, MessageStore, LoginSessionStore } = require('../config/store');
 const { isMongoConnected } = require('../config/db');
 const Lead = require('../models/Lead');
 const ActivityLog = require('../models/ActivityLog');
@@ -19,7 +19,8 @@ const getDashboardMetrics = async (req, res, next) => {
     for (const sp of salespeople) {
       const metrics = await LeadStore.getManagerMetrics(sp._id);
       const stats = await ActivityLogStore.getUserStats(sp._id);
-      allMetrics.push({ user: { _id: sp._id, name: sp.name, email: sp.email }, metrics, stats });
+      const sessionStats = await LoginSessionStore.getUserStats(sp._id);
+      allMetrics.push({ user: { _id: sp._id, name: sp.name, email: sp.email }, metrics, stats: { ...stats, ...sessionStats } });
       totalLeads += metrics.total;
       totalContacted += metrics.contacted;
       totalInterested += metrics.interested;

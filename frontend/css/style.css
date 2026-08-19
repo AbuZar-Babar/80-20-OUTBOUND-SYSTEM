@@ -829,6 +829,36 @@ select.input-control:focus {
   margin-bottom: 0.5rem;
 }
 
+/* Tab bar for email section */
+.tab-bar {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 0.5rem;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255,255,255,0.05);
+}
+
+.tab-btn.active {
+  color: var(--accent-primary);
+  background: rgba(99, 102, 241, 0.15);
+}
+
 @media (max-width: 768px) {
   .outcome-grid {
     grid-template-columns: repeat(2, 1fr);

@@ -86,8 +86,21 @@ const API = {
 
   sendEmail: (data) => apiRequest('/email/send', 'POST', data),
   bulkEmail: (data) => apiRequest('/email/bulk', 'POST', data),
+  getTemplates: () => apiRequest('/email/templates', 'GET'),
+  createTemplate: (data) => apiRequest('/email/templates', 'POST', data),
+  updateTemplate: (id, data) => apiRequest(`/email/templates/${id}`, 'PUT', data),
+  deleteTemplate: (id) => apiRequest(`/email/templates/${id}`, 'DELETE'),
+  sendTemplateEmail: (data) => apiRequest('/email/send-template', 'POST', data),
+
+  reassignLead: (leadId, userId) => apiRequest('/leads/reassign', 'POST', { leadId, userId }),
+  checkContactHours: (leadId) => apiRequest(`/leads/contact-hours?leadId=${leadId}`, 'GET'),
 
   getMetrics: () => apiRequest('/manager/metrics', 'GET'),
   getActivity: (limit = 50) => apiRequest(`/manager/activity?limit=${limit}`, 'GET'),
-  getAlerts: () => apiRequest('/manager/alerts', 'GET')
+  getAlerts: () => apiRequest('/manager/alerts', 'GET'),
+
+  recordLogin: () => apiRequest('/session/login', 'POST'),
+  heartbeat: () => apiRequest('/session/heartbeat', 'POST'),
+  updateDialingTime: (seconds) => apiRequest('/session/dialing-time', 'POST', { seconds }),
+  getSessionStats: (userId) => apiRequest(`/session/stats${userId ? '/' + userId : ''}`, 'GET')
 };
