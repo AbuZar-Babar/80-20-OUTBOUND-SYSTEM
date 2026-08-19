@@ -52,8 +52,25 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   const mongoConnected = await connectDB();
 
-  // Initialize store (Zero-DB) - will check isMongoConnected() for each operation
-  require('./config/store');
+  // Initialize store (Zero-DB)
+  const { UserStore } = require('./config/store');
+
+  // Auto-create admin account if it doesn't exist
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (adminEmail && adminPassword) {
+    const existingAdmin = await UserStore.findOne({ email: adminEmail });
+    if (!existingAdmin) {
+      await UserStore.create({
+        name: 'Admin',
+        email: adminEmail,
+        password: adminPassword,
+        role: 'admin',
+        approved: true
+      });
+      console.log(`[Admin] Default admin account created: ${adminEmail}`);
+    }
+  }
 
   app.listen(PORT, () => {
     const dbMode = mongoConnected ? 'MongoDB Atlas' : 'Zero-DB (Local JSON File)';

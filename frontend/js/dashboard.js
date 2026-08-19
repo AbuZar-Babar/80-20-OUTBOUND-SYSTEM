@@ -45,6 +45,9 @@ async function loadUserProfile() {
       document.getElementById('nav-admin').style.display = 'flex';
       document.getElementById('section-admin').style.display = 'flex';
       fetchPendingUsers();
+    } else {
+      document.getElementById('nav-admin').style.display = 'none';
+      document.getElementById('section-admin').style.display = 'none';
     }
   } catch (err) {
     console.error('Profile fetch error:', err);

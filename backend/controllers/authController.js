@@ -23,15 +23,10 @@ const registerUser = async (req, res, next) => {
       });
     }
 
-    const allUsers = await UserStore.findAllUsers();
-    const isFirstUser = allUsers.length === 0;
-
     const user = await UserStore.create({
       name,
       email: email.toLowerCase(),
-      password,
-      role: isFirstUser ? 'admin' : 'user',
-      approved: isFirstUser
+      password
     });
 
     res.status(201).json({
