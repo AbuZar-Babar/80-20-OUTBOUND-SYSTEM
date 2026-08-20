@@ -52,6 +52,11 @@ app.use('/api/whatsapp', whatsappTemplateRoutes);
 const frontendPath = path.join(__dirname, '../frontend');
 app.use(express.static(frontendPath));
 
+// Dashboard route
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(frontendPath, 'dashboard.html'));
+});
+
 app.get('*', (req, res) => {
   if (req.originalUrl.startsWith('/api')) {
     return res.status(404).json({ success: false, message: 'API route not found' });
@@ -61,15 +66,11 @@ app.get('*', (req, res) => {
 
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
-
 const startServer = async () => {
   const mongoConnected = await connectDB();
 
-  // Initialize store (Zero-DB)
   const { UserStore } = require('./config/store');
 
-  // Auto-create admin account if it doesn't exist
   const adminEmail = process.env.ADMIN_EMAIL;
   const adminPassword = process.env.ADMIN_PASSWORD;
   if (adminEmail && adminPassword) {
@@ -85,16 +86,21 @@ const startServer = async () => {
       console.log(`[Admin] Default admin account created: ${adminEmail}`);
     }
   }
-
-  app.listen(PORT, () => {
-    const dbMode = mongoConnected ? 'MongoDB Atlas' : 'Zero-DB (Local JSON File)';
-    console.log(`====================================================`);
-    console.log(` Caller App Server Running on http://localhost:${PORT}`);
-    console.log(` Database Mode: ${dbMode}`);
-    console.log(` API Base URL: http://localhost:${PORT}/api`);
-    console.log(` Frontend Served At: http://localhost:${PORT}`);
-    console.log(`====================================================`);
-  });
 };
 
-startServer();
+if (process.env.VERCEL) {
+  startServer();
+} else {
+  startServer().then(() => {
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, () => {
+      console.log(`====================================================`);
+      console.log(` Caller App Server Running on http://localhost:${PORT}`);
+      console.log(` API Base URL: http://localhost:${PORT}/api`);
+      console.log(` Frontend Served At: http://localhost:${PORT}`);
+      console.log(`====================================================`);
+    });
+  });
+}
+
+module.exports = app;
