@@ -28,16 +28,23 @@ const getTwilioClient = () => {
 const makeOutboundCall = async (to, voiceUrl, statusUrl) => {
   const { client, fromNumber } = getTwilioClient();
 
-  const call = await client.calls.create({
+  const payload = {
     url: voiceUrl,
     to: to,
-    from: fromNumber,
-    statusCallback: statusUrl,
-    statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
-    record: true,
-    recordingStatusCallback: statusUrl,
-    recordingStatusCallbackEvent: ['completed', 'absent']
-  });
+    from: fromNumber
+  };
+
+  if (process.env.TWILIO_RECORDING_ENABLED === 'true') {
+    payload.record = true;
+    if (statusUrl) {
+      payload.statusCallback = statusUrl;
+      payload.statusCallbackEvent = ['initiated', 'ringing', 'answered', 'completed'];
+      payload.recordingStatusCallback = statusUrl;
+      payload.recordingStatusCallbackEvent = ['completed', 'absent'];
+    }
+  }
+
+  const call = await client.calls.create(payload);
 
   return {
     callSid: call.sid,
