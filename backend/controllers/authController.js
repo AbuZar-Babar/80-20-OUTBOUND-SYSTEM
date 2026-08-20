@@ -6,12 +6,19 @@ const { generateToken } = require('../services/tokenService');
 // @access  Public
 const registerUser = async (req, res, next) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
         success: false,
         message: 'Please provide name, email, and password.'
+      });
+    }
+
+    if (role && !['owner', 'manager', 'salesperson', 'admin'].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role. Must be one of: owner, manager, salesperson, admin.'
       });
     }
 
@@ -26,7 +33,8 @@ const registerUser = async (req, res, next) => {
     const user = await UserStore.create({
       name,
       email: email.toLowerCase(),
-      password
+      password,
+      role: role || 'salesperson'
     });
 
     res.status(201).json({
@@ -36,6 +44,7 @@ const registerUser = async (req, res, next) => {
         _id: user._id,
         name: user.name,
         email: user.email,
+        role: user.role,
         createdAt: user.createdAt
       }
     });
@@ -81,6 +90,8 @@ const loginUser = async (req, res, next) => {
       });
     }
 
+    await UserStore.updateLastLogin(user._id);
+
     const token = generateToken(user._id);
 
     res.status(200).json({
@@ -90,6 +101,7 @@ const loginUser = async (req, res, next) => {
         _id: user._id,
         name: user.name,
         email: user.email,
+        role: user.role,
         token
       }
     });

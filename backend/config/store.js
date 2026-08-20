@@ -85,13 +85,17 @@ const UserStore = {
   },
 
   async create({ name, email, password, role, approved }) {
+    const now = new Date();
     if (isMongoConnected()) {
       const user = await User.create({
-        name,
-        email: email.toLowerCase(),
+        name: name.trim(),
+        email: email.toLowerCase().trim(),
         password,
         role: role || 'salesperson',
-        approved: approved !== undefined ? approved : false
+        approved: approved !== undefined ? approved : false,
+        lastActive: now,
+        lastLogin: now,
+        createdAt: now
       });
       const { password: _, ...rest } = user.toObject();
       return rest;
@@ -106,7 +110,9 @@ const UserStore = {
       password: hashedPassword,
       role: role || 'salesperson',
       approved: approved !== undefined ? approved : false,
-      createdAt: new Date().toISOString()
+      lastActive: now.toISOString(),
+      lastLogin: now.toISOString(),
+      createdAt: now.toISOString()
     };
     store.users.push(newUser);
     saveStore();
@@ -130,20 +136,64 @@ const UserStore = {
     return rest;
   },
 
+  async updateLastActive(id) {
+    const now = new Date();
+    if (isMongoConnected()) {
+      return await User.findByIdAndUpdate(id, { lastActive: now }, { new: true }).select('-password').lean();
+    }
+    const idx = store.users.findIndex(u => u._id === id);
+    if (idx === -1) return null;
+    store.users[idx].lastActive = now.toISOString();
+    saveStore();
+    const { password: _, ...rest } = store.users[idx];
+    return rest;
+  },
+
+  async updateLastLogin(id) {
+    const now = new Date();
+    if (isMongoConnected()) {
+      return await User.findByIdAndUpdate(id, { lastLogin: now, lastActive: now }, { new: true }).select('-password').lean();
+    }
+    const idx = store.users.findIndex(u => u._id === id);
+    if (idx === -1) return null;
+    store.users[idx].lastLogin = now.toISOString();
+    store.users[idx].lastActive = now.toISOString();
+    saveStore();
+    const { password: _, ...rest } = store.users[idx];
+    return rest;
+  },
+
   async findPendingUsers() {
     if (isMongoConnected()) {
-      return await User.find({ approved: false }).select('-password').lean();
+      return await User.find({ approved: false }).sort({ createdAt: -1 }).select('-password').lean();
     }
-    return store.users
+    return (store.users || [])
       .filter(u => u.approved === false)
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
       .map(({ password, ...rest }) => rest);
   },
 
   async findAllUsers() {
     if (isMongoConnected()) {
-      return await User.find().select('-password').lean();
+      return await User.find().sort({ createdAt: -1 }).select('-password').lean();
     }
-    return store.users.map(({ password, ...rest }) => rest);
+    return (store.users || [])
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+      .map(({ password, ...rest }) => rest);
+  },
+
+  async findOnlineUsers() {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    if (isMongoConnected()) {
+      return await User.find({ lastActive: { $gte: fiveMinutesAgo }, approved: true })
+        .sort({ lastActive: -1 })
+        .select('-password')
+        .lean();
+    }
+    return (store.users || [])
+      .filter(u => u.approved && u.lastActive && new Date(u.lastActive) >= fiveMinutesAgo)
+      .sort((a, b) => new Date(b.lastActive || 0) - new Date(a.lastActive || 0))
+      .map(({ password, ...rest }) => rest);
   },
 
   async approveUser(id) {

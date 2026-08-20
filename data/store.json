@@ -41,6 +41,15 @@
       "email": "test_1787067229709@example.com",
       "password": "$2a$10$qmPrr0d.Vusb.9GjtwagpO7GbNFM4AuXtXvDIwyQjkq7VlCOnnoWK",
       "createdAt": "2026-08-18T15:33:49.922Z"
+    },
+    {
+      "_id": "0ub2nxvf6mt1ucad3",
+      "name": "Agent Smith",
+      "email": "smith_1787249725697@test.com",
+      "password": "$2a$10$YJqfD6X/hXqeWH7apX7U4.9enayK6DHnTvF/QYux2.axZSQfLOEa2",
+      "role": "salesperson",
+      "approved": true,
+      "createdAt": "2026-08-20T18:15:25.815Z"
     }
   ],
   "calls": [],
@@ -53,6 +62,53 @@
       "phone": "+923001234567",
       "createdAt": "2026-08-18T15:33:12.695Z",
       "updatedAt": "2026-08-18T15:33:12.695Z"
+    }
+  ],
+  "configuredInboxes": [
+    {
+      "_id": "dpfwh3vd6mt1uca96",
+      "name": "Test Inbox",
+      "fromEmail": "outreach@domain.com",
+      "fromName": "Test Rep",
+      "dailyLimit": 25,
+      "status": "healthy",
+      "active": true,
+      "dailyCounters": [
+        {
+          "date": "2026-08-20",
+          "emailsSent": 1
+        }
+      ],
+      "createdAt": "2026-08-20T18:15:25.674Z"
+    }
+  ],
+  "loginSessions": [
+    {
+      "_id": "parxviu2dmt1ucad6",
+      "userId": "0ub2nxvf6mt1ucad3",
+      "date": "2026-08-20",
+      "breakTimeSeconds": 0,
+      "isOnBreak": false,
+      "loginAt": "2026-08-20T18:15:25.818Z",
+      "breakStartedAt": null,
+      "lastActivityAt": "2026-08-20T18:15:25.822Z"
+    }
+  ],
+  "leads": [
+    {
+      "_id": "ugji4ruysmt1ucade",
+      "userId": "0ub2nxvf6mt1ucad3",
+      "contact": {
+        "name": "Prospect Jane",
+        "phone": "+1234567890",
+        "email": "jane@example.com"
+      },
+      "status": "new",
+      "hasUnansweredReply": true,
+      "lastReplyText": "Yes, please call me back tomorrow!",
+      "lastReplyChannel": "sms",
+      "lastReplyAt": "2026-08-20T18:15:25.825Z",
+      "createdAt": "2026-08-20T18:15:25.826Z"
     }
   ]
 }

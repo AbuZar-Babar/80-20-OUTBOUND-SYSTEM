@@ -57,7 +57,8 @@ const API = {
 
   getPendingUsers: () => apiRequest('/admin/users/pending', 'GET'),
   getAllUsers: () => apiRequest('/admin/users', 'GET'),
-  approveUser: (id) => apiRequest(`/admin/users/${id}/approve`, 'POST'),
+  getOnlineUsers: () => apiRequest('/admin/online-users', 'GET'),
+  approveUser: (id, role) => apiRequest(`/admin/users/${id}/approve`, 'POST', role ? { role } : null),
   rejectUser: (id) => apiRequest(`/admin/users/${id}/reject`, 'DELETE'),
   updateUserRole: (id, role) => apiRequest(`/admin/users/${id}/role`, 'POST', { role }),
 

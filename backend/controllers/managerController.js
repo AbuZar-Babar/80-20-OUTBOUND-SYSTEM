@@ -6,7 +6,8 @@ const Message = require('../models/Message');
 
 const getDashboardMetrics = async (req, res, next) => {
   try {
-    if (req.user.role === 'salesperson') {
+    // Allow manager, salesperson, or admin
+    if (['salesperson', 'manager', 'admin'].includes(req.user.role)) {
       const metrics = await LeadStore.getManagerMetrics(req.user._id);
       const stats = await ActivityLogStore.getUserStats(req.user._id);
       const sessionStats = await LoginSessionStore.getUserStats(req.user._id);
@@ -26,44 +27,20 @@ const getDashboardMetrics = async (req, res, next) => {
       });
     }
 
-    const users = await UserStore.findAllUsers();
-    const salespeople = users.filter(u => u.role === 'salesperson');
-    const allMetrics = [];
-    let totalLeads = 0, totalContacted = 0, totalInterested = 0, totalBooked = 0, totalOverdue = 0;
-
-    for (const sp of salespeople) {
-      const metrics = await LeadStore.getManagerMetrics(sp._id);
-      const stats = await ActivityLogStore.getUserStats(sp._id);
-      const sessionStats = await LoginSessionStore.getUserStats(sp._id);
-      const activeHours = (sessionStats.activeTimeSeconds || 0) / 3600;
-      const callsPerHour = activeHours > 0 ? (stats.callsToday / activeHours).toFixed(1) : (stats.callsToday || 0);
-      const bookingRate = metrics.contacted > 0 ? ((metrics.booked / metrics.contacted) * 100).toFixed(1) + '%' : '0%';
-
-      allMetrics.push({
-        user: { _id: sp._id, name: sp.name, email: sp.email },
-        metrics: { ...metrics, bookingRate },
-        stats: { ...stats, ...sessionStats, callsPerHour }
-      });
-      totalLeads += metrics.total;
-      totalContacted += metrics.contacted;
-      totalInterested += metrics.interested;
-      totalBooked += metrics.booked;
-      totalOverdue += metrics.callbacksOverdue;
-    }
-
-    res.status(200).json({
+    // For other roles, return empty metrics
+    return res.status(200).json({
       success: true,
       data: {
-        overview: {
-          totalLeads,
-          totalContacted,
-          totalInterested,
-          totalBooked,
-          totalOverdue,
-          overallBookingRate: totalContacted > 0 ? ((totalBooked / totalContacted) * 100).toFixed(1) + '%' : '0%',
-          salespersonCount: salespeople.length
-        },
-        salespeople: allMetrics
+        callsPerHour: 0,
+        bookingRate: '0%',
+        callsToday: 0,
+        contacted: 0,
+        interested: 0,
+        booked: 0,
+        missedCalls: 0,
+        conversionRate: '0%',
+        activeTimeSeconds: 0,
+        totalLeads: 0
       }
     });
   } catch (error) {
@@ -73,11 +50,14 @@ const getDashboardMetrics = async (req, res, next) => {
 
 const getTeamActivity = async (req, res, next) => {
   try {
+    // Allow manager, salesperson, or admin
+    const userId = ['salesperson', 'manager', 'admin'].includes(req.user.role) ? req.user._id : null;
+
     const limit = parseInt(req.query.limit) || 50;
     let logs;
 
-    if (req.user.role === 'salesperson') {
-      logs = await ActivityLogStore.findByUser(req.user._id, limit);
+    if (userId) {
+      logs = await ActivityLogStore.findByUser(userId, limit);
     } else {
       if (isMongoConnected()) {
         logs = await ActivityLog.find().sort({ timestamp: -1 }).limit(limit).populate('userId', 'name').lean();

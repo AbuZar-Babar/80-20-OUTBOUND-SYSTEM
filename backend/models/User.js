@@ -21,7 +21,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['owner', 'manager', 'salesperson', 'admin'],
+    enum: ['owner', 'manager', 'salesperson', 'admin', 'user'],
     default: 'salesperson'
   },
   approved: {
@@ -51,6 +51,14 @@ const userSchema = new mongoose.Schema({
   crmWebhookUrl: {
     type: String,
     default: ''
+  },
+  lastLogin: {
+    type: Date,
+    default: Date.now
+  },
+  lastActive: {
+    type: Date,
+    default: Date.now
   },
   createdAt: {
     type: Date,

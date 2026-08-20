@@ -77,7 +77,7 @@ function initSidebarNavigation() {
       if (section === 'campaigns') fetchCampaigns();
       if (section === 'activity') fetchActivity();
       if (section === 'team') fetchTeamMetrics();
-      if (section === 'admin') fetchPendingUsers();
+      if (section === 'admin') fetchAdminData();
       if (section === 'whatsapp') fetchWhatsAppTemplates();
     });
   });
@@ -158,6 +158,10 @@ async function refreshDashboard() {
       document.getElementById('alerts-pill').style.display = 'none';
       const existingAlerts = document.querySelector('.alerts-list');
       if (existingAlerts) existingAlerts.remove();
+    }
+
+    if (document.getElementById('section-admin') && document.getElementById('section-admin').style.display !== 'none') {
+      fetchAdminData().catch(() => {});
     }
   } catch (err) { console.error('Metrics error:', err); }
 }
@@ -865,33 +869,299 @@ async function fetchTeamMetrics() {
 }
 
 /* ======================== ADMIN ======================== */
-async function fetchPendingUsers() {
+/* ======================== ADMIN & USER MANAGEMENT ======================== */
+let adminUsersData = [];
+let adminPendingUsersData = [];
+let currentAdminTab = 'all';
+let adminSearchQuery = '';
+
+async function fetchAdminData() {
   try {
-    const res = await API.getPendingUsers();
-    const container = document.getElementById('pending-users-list');
-    if (!res.data || res.data.length === 0) { container.innerHTML = '<div class="empty-placeholder">No pending users.</div>'; return; }
-    container.innerHTML = res.data.map(u => `
-      <div class="contact-card-item">
-        <div style="display:flex;align-items:center;gap:0.85rem">
-          <div class="avatar-initial">${u.name.charAt(0).toUpperCase()}</div>
-          <div><div style="font-weight:600">${escapeHtml(u.name)}</div><div style="font-size:0.8rem;color:var(--text-muted)">${u.email}</div></div>
+    const [allRes, pendingRes] = await Promise.all([
+      API.getAllUsers().catch(() => ({ data: [] })),
+      API.getPendingUsers().catch(() => ({ data: [] }))
+    ]);
+
+    adminUsersData = allRes.data || [];
+    adminPendingUsersData = pendingRes.data || [];
+
+    // Calculate stats
+    const totalUsers = adminUsersData.length;
+    const onlineCount = adminUsersData.filter(u => u.isOnline).length;
+    const pendingCount = adminPendingUsersData.length;
+    const managerCount = adminUsersData.filter(u => u.role === 'manager' || u.role === 'admin' || u.role === 'owner').length;
+    const standardUserCount = adminUsersData.filter(u => u.role === 'salesperson' || u.role === 'user').length;
+
+    // Update stat cards
+    const elTotal = document.getElementById('stat-admin-total');
+    const elOnline = document.getElementById('stat-admin-online');
+    const elPending = document.getElementById('stat-admin-pending');
+    const elManagers = document.getElementById('stat-admin-managers');
+    if (elTotal) elTotal.textContent = totalUsers;
+    if (elOnline) elOnline.textContent = onlineCount;
+    if (elPending) elPending.textContent = pendingCount;
+    if (elManagers) elManagers.textContent = managerCount;
+
+    // Update tab counters
+    const tabAll = document.getElementById('tab-cnt-all');
+    const tabOnline = document.getElementById('tab-cnt-online');
+    const tabPending = document.getElementById('tab-cnt-pending');
+    const tabManagers = document.getElementById('tab-cnt-managers');
+    const tabUsers = document.getElementById('tab-cnt-users');
+    if (tabAll) tabAll.textContent = totalUsers;
+    if (tabOnline) tabOnline.textContent = onlineCount;
+    if (tabPending) tabPending.textContent = pendingCount;
+    if (tabManagers) tabManagers.textContent = managerCount;
+    if (tabUsers) tabUsers.textContent = standardUserCount;
+
+    // Render Pending Section
+    const pendingContainer = document.getElementById('pending-users-container');
+    const pendingList = document.getElementById('pending-users-list');
+    const pendingBadge = document.getElementById('pending-count-badge');
+
+    if (pendingCount > 0) {
+      if (pendingContainer) pendingContainer.style.display = 'block';
+      if (pendingBadge) pendingBadge.textContent = `${pendingCount} Pending`;
+      if (pendingList) {
+        pendingList.innerHTML = adminPendingUsersData.map(u => `
+          <div class="user-admin-card pending-card">
+            <div style="display:flex;align-items:center;gap:0.85rem;min-width:200px">
+              <div class="avatar-initial" style="background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%)">
+                ${(u.name || 'U').charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <div style="font-weight:600;font-size:0.95rem;color:var(--text-primary)">${escapeHtml(u.name)}</div>
+                <div style="font-size:0.8rem;color:var(--text-muted)">${escapeHtml(u.email)}</div>
+                <div style="font-size:0.75rem;color:var(--accent-amber);margin-top:2px">
+                  Registered: ${u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'Recently'}
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+              <select id="role-select-${u._id}" class="input-control" style="padding:0.35rem 0.6rem;font-size:0.8rem;width:auto">
+                <option value="salesperson">Role: User / Agent</option>
+                <option value="manager">Role: Manager</option>
+                <option value="admin">Role: Admin</option>
+              </select>
+              <button class="btn btn-sm btn-emerald" onclick="approvePendingUser('${u._id}')">✓ Approve</button>
+              <button class="btn btn-sm btn-rose" onclick="rejectUser('${u._id}')">✕ Reject</button>
+            </div>
+          </div>
+        `).join('');
+      }
+    } else {
+      if (pendingContainer) pendingContainer.style.display = 'none';
+      if (pendingList) pendingList.innerHTML = '';
+    }
+
+    renderAdminUsers();
+  } catch (err) {
+    console.error('Admin fetch error:', err);
+    const container = document.getElementById('all-users-list');
+    if (container) container.innerHTML = `<div class="empty-placeholder">Error loading users: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function setAdminTab(tab) {
+  currentAdminTab = tab;
+  document.querySelectorAll('.btn-admin-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-tab') === tab);
+  });
+  renderAdminUsers();
+}
+
+function filterAdminUsers() {
+  const searchInput = document.getElementById('admin-user-search');
+  adminSearchQuery = (searchInput ? searchInput.value : '').toLowerCase().trim();
+  renderAdminUsers();
+}
+
+function formatUserLastSeen(u) {
+  if (u.isOnline) {
+    return `<span style="display:inline-flex;align-items:center;gap:0.35rem;color:var(--accent-emerald);font-weight:600;font-size:0.75rem">
+      <span class="online-pulse-dot"></span> Online Now
+    </span>`;
+  }
+  if (!u.lastActive) {
+    return `<span style="display:inline-flex;align-items:center;gap:0.35rem;color:var(--text-muted);font-size:0.75rem">
+      <span class="offline-dot"></span> Offline
+    </span>`;
+  }
+  const diffMinutes = Math.floor((Date.now() - new Date(u.lastActive).getTime()) / (60 * 1000));
+  if (diffMinutes < 60) {
+    return `<span style="display:inline-flex;align-items:center;gap:0.35rem;color:var(--text-secondary);font-size:0.75rem">
+      <span class="offline-dot"></span> Last active ${diffMinutes}m ago
+    </span>`;
+  }
+  if (diffMinutes < 1440) {
+    const hours = Math.floor(diffMinutes / 60);
+    return `<span style="display:inline-flex;align-items:center;gap:0.35rem;color:var(--text-secondary);font-size:0.75rem">
+      <span class="offline-dot"></span> Last active ${hours}h ago
+    </span>`;
+  }
+  return `<span style="display:inline-flex;align-items:center;gap:0.35rem;color:var(--text-muted);font-size:0.75rem">
+    <span class="offline-dot"></span> ${new Date(u.lastActive).toLocaleDateString()}
+  </span>`;
+}
+
+function renderAdminUsers() {
+  const container = document.getElementById('all-users-list');
+  if (!container) return;
+
+  let filtered = [...adminUsersData];
+
+  // Apply tab filter
+  if (currentAdminTab === 'online') {
+    filtered = filtered.filter(u => u.isOnline);
+  } else if (currentAdminTab === 'pending') {
+    filtered = filtered.filter(u => u.approved === false);
+  } else if (currentAdminTab === 'managers') {
+    filtered = filtered.filter(u => u.role === 'manager' || u.role === 'admin' || u.role === 'owner');
+  } else if (currentAdminTab === 'users') {
+    filtered = filtered.filter(u => u.role === 'salesperson' || u.role === 'user');
+  }
+
+  // Apply search query
+  if (adminSearchQuery) {
+    filtered = filtered.filter(u =>
+      (u.name || '').toLowerCase().includes(adminSearchQuery) ||
+      (u.email || '').toLowerCase().includes(adminSearchQuery) ||
+      (u.role || '').toLowerCase().includes(adminSearchQuery)
+    );
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty-placeholder">No users found matching current filters.</div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map(u => {
+    const isSelf = currentUser && currentUser._id === u._id;
+    const isPending = u.approved === false;
+    const role = u.role || 'salesperson';
+    const roleBadgeClass = (role === 'admin' || role === 'owner') ? 'role-badge-admin' : (role === 'manager' ? 'role-badge-manager' : 'role-badge-user');
+    const roleLabel = role === 'salesperson' ? 'User / Agent' : role.charAt(0).toUpperCase() + role.slice(1);
+
+    return `
+      <div class="user-admin-card ${isPending ? 'pending-card' : ''}">
+        <div style="display:flex;align-items:center;gap:0.85rem;min-width:220px;flex:1">
+          <div class="avatar-initial" style="${role === 'admin' ? 'background:var(--grad-primary)' : (role === 'manager' ? 'background:var(--grad-cyan)' : 'background:rgba(255,255,255,0.1)')}">
+            ${(u.name || 'U').charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+              <span style="font-weight:600;font-size:0.95rem;color:var(--text-primary)">${escapeHtml(u.name)}</span>
+              ${isSelf ? '<span class="badge" style="font-size:0.65rem;background:rgba(99,102,241,0.2);color:var(--accent-primary)">You</span>' : ''}
+              <span class="role-badge ${roleBadgeClass}">${roleLabel}</span>
+              ${isPending ? '<span class="badge" style="font-size:0.65rem;background:rgba(245,158,11,0.15);color:var(--accent-amber);border:1px solid rgba(245,158,11,0.3)">Pending Approval</span>' : ''}
+            </div>
+            <div style="font-size:0.8rem;color:var(--text-muted);margin-top:2px">${escapeHtml(u.email)}</div>
+            <div style="margin-top:4px">
+              ${formatUserLastSeen(u)}
+            </div>
+          </div>
         </div>
-        <div style="display:flex;gap:0.4rem">
-          <button class="btn btn-sm btn-emerald" onclick="approveUser('${u._id}')">Approve</button>
-          <button class="btn btn-sm btn-rose" onclick="rejectUser('${u._id}')">Reject</button>
+
+        <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end">
+          ${isPending ? `
+            <button class="btn btn-sm btn-emerald" onclick="approveUser('${u._id}')">✓ Approve</button>
+            <button class="btn btn-sm btn-rose" onclick="rejectUser('${u._id}')">✕ Reject</button>
+          ` : `
+            ${role === 'salesperson' || role === 'user' ? `
+              <button class="btn btn-sm btn-cyan" onclick="promoteToManager('${u._id}')" title="Promote to Manager">
+                👔 Make Manager
+              </button>
+            ` : ''}
+            ${role === 'manager' ? `
+              <button class="btn btn-sm btn-outline" onclick="demoteToUser('${u._id}')" title="Demote to Standard User">
+                👤 Demote to User
+              </button>
+            ` : ''}
+
+            <!-- Quick Role Select Dropdown -->
+            <select class="input-control" style="padding:0.35rem 0.6rem;font-size:0.78rem;width:auto" onchange="changeUserRole('${u._id}', this.value)" ${isSelf ? 'disabled title="Cannot change own role"' : ''}>
+              <option value="salesperson" ${role === 'salesperson' || role === 'user' ? 'selected' : ''}>User / Agent</option>
+              <option value="manager" ${role === 'manager' ? 'selected' : ''}>Manager</option>
+              <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
+            </select>
+
+            ${!isSelf ? `
+              <button class="btn btn-sm btn-rose" onclick="rejectUser('${u._id}')" title="Remove User">🗑</button>
+            ` : ''}
+          `}
         </div>
-      </div>`).join('');
-  } catch (err) { console.error('Pending users error:', err); }
+      </div>
+    `;
+  }).join('');
+}
+
+async function approvePendingUser(id) {
+  const roleSelect = document.getElementById(`role-select-${id}`);
+  const role = roleSelect ? roleSelect.value : 'salesperson';
+  try {
+    await API.approveUser(id, role);
+    showToast(`User approved as ${role}!`, 'success');
+    await fetchAdminData();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
 }
 
 async function approveUser(id) {
-  try { await API.approveUser(id); showToast('Approved!', 'success'); fetchPendingUsers(); } catch (err) { showToast(err.message, 'error'); }
+  try {
+    await API.approveUser(id);
+    showToast('User approved successfully!', 'success');
+    await fetchAdminData();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
 }
 
 async function rejectUser(id) {
-  if (!confirm('Reject this user?')) return;
-  try { await API.rejectUser(id); showToast('Rejected.', 'info'); fetchPendingUsers(); } catch (err) { showToast(err.message, 'error'); }
+  if (!confirm('Are you sure you want to remove/reject this user?')) return;
+  try {
+    await API.rejectUser(id);
+    showToast('User removed successfully.', 'info');
+    await fetchAdminData();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
 }
+
+async function promoteToManager(id) {
+  if (!confirm('Promote this user to Manager?')) return;
+  try {
+    await API.updateUserRole(id, 'manager');
+    showToast('User promoted to Manager!', 'success');
+    await fetchAdminData();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function demoteToUser(id) {
+  if (!confirm('Demote this manager to standard User / Agent?')) return;
+  try {
+    await API.updateUserRole(id, 'salesperson');
+    showToast('Role updated to User / Agent.', 'info');
+    await fetchAdminData();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function changeUserRole(id, newRole) {
+  try {
+    await API.updateUserRole(id, newRole);
+    showToast(`Role updated to ${newRole === 'salesperson' ? 'User' : newRole}!`, 'success');
+    await fetchAdminData();
+  } catch (err) {
+    showToast(err.message, 'error');
+    await fetchAdminData();
+  }
+}
+
+const fetchPendingUsers = fetchAdminData;
 
 /* ======================== WHATSAPP ======================== */
 function initWhatsAppActions() {

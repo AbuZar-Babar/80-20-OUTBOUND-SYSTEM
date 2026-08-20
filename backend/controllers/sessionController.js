@@ -1,4 +1,4 @@
-const { LoginSessionStore } = require('../config/store');
+const { LoginSessionStore, UserStore } = require('../config/store');
 
 const recordLogin = async (req, res, next) => {
   try {
@@ -7,6 +7,7 @@ const recordLogin = async (req, res, next) => {
     if (!session) {
       session = await LoginSessionStore.create({ userId: req.user._id, date: today });
     }
+    await UserStore.updateLastLogin(req.user._id);
     res.status(200).json({ success: true, data: session });
   } catch (err) { next(err); }
 };
@@ -29,6 +30,10 @@ const heartbeat = async (req, res, next) => {
       lastActivityAt: now,
       activeTimeSeconds: (session.activeTimeSeconds || 0) + activeAddition
     });
+
+    // Update user's lastActive timestamp
+    await UserStore.updateLastActive(req.user._id);
+
     res.status(200).json({ success: true, isOnBreak: !!session.isOnBreak });
   } catch (err) { next(err); }
 };
@@ -71,5 +76,12 @@ const getUserSessionStats = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { recordLogin, heartbeat, toggleBreak, updateDialingTime, getUserSessionStats };
+const getOnlineUsers = async (req, res, next) => {
+  try {
+    const onlineUsers = await UserStore.findOnlineUsers();
+    res.status(200).json({ success: true, count: onlineUsers.length, data: onlineUsers });
+  } catch (err) { next(err); }
+};
+
+module.exports = { recordLogin, heartbeat, toggleBreak, updateDialingTime, getUserSessionStats, getOnlineUsers };
 
