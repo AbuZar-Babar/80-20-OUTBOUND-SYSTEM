@@ -44,6 +44,14 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  calendarLink: {
+    type: String,
+    default: ''
+  },
+  crmWebhookUrl: {
+    type: String,
+    default: ''
+  },
   createdAt: {
     type: Date,
     default: Date.now

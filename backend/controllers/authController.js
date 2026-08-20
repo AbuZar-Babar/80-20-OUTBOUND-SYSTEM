@@ -115,6 +115,8 @@ const getMe = async (req, res, next) => {
         timezone: req.user.timezone,
         dailyLeadTarget: req.user.dailyLeadTarget,
         dailyEmailLimit: req.user.dailyEmailLimit,
+        calendarLink: req.user.calendarLink || '',
+        crmWebhookUrl: req.user.crmWebhookUrl || '',
         createdAt: req.user.createdAt
       }
     });
@@ -123,8 +125,24 @@ const getMe = async (req, res, next) => {
   }
 };
 
+const updateProfile = async (req, res, next) => {
+  try {
+    const { calendarLink, crmWebhookUrl, timezone } = req.body;
+    const updateData = {};
+    if (calendarLink !== undefined) updateData.calendarLink = calendarLink;
+    if (crmWebhookUrl !== undefined) updateData.crmWebhookUrl = crmWebhookUrl;
+    if (timezone !== undefined) updateData.timezone = timezone;
+
+    const user = await UserStore.updateProfile(req.user._id, updateData);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+
+    res.status(200).json({ success: true, message: 'Profile updated.', data: user });
+  } catch (error) { next(error); }
+};
+
 module.exports = {
   registerUser,
   loginUser,
-  getMe
+  getMe,
+  updateProfile
 };

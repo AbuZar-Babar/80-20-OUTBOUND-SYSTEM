@@ -675,6 +675,40 @@ When `MONGODB_URI` is not set, Zero-DB automatically activates:
 
 ---
 
+## MongoDB Atlas Backup Policy
+
+### Automated Backups
+MongoDB Atlas provides continuous backups on the M10+ tier:
+- **Continuous Cloud Backups**: Point-in-time recovery up to 30 days
+- **Daily Snapshots**: retained for 7 days on M10, 30 days on M30+
+- **Monthly Snapshots**: retained for 12 months on M10+
+
+### Manual Backups
+For the M0 free tier (no automated backups):
+```bash
+# Export data (requires mongodump installed)
+mongodump --uri="mongodb+srv://<user>:<pass>@cluster.mongodb.net/dialer" --out=./backup
+
+# Or export a single collection to JSON
+mongoexport --uri="mongodb+srv://..." --collection=leads --out=leads-backup.json
+```
+
+### Restore
+```bash
+# Restore from dump
+mongorestore --uri="mongodb+srv://..." ./backup
+
+# Import from JSON
+mongoimport --uri="mongodb+srv://..." --collection=leads --file=leads-backup.json
+```
+
+### Recommended Backup Schedule
+- **Daily**: Export leads and activity logs at end of business day
+- **Weekly**: Full database export
+- **Before migrations**: Always backup before schema changes
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |

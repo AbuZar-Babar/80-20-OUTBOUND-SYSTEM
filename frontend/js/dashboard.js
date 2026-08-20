@@ -112,7 +112,29 @@ async function refreshDashboard() {
     const alertsRes = await API.getAlerts();
     if (alertsRes.data && alertsRes.data.length > 0) {
       document.getElementById('alerts-pill').style.display = 'inline-flex';
-      document.getElementById('alerts-text').textContent = `${alertsRes.data.length} alert(s)`;
+      const dismissed = JSON.parse(localStorage.getItem('dismissedAlerts') || '[]');
+      const activeAlerts = alertsRes.data.filter(a => !dismissed.includes(a.category));
+      if (activeAlerts.length > 0) {
+        document.getElementById('alerts-text').textContent = `${activeAlerts.length} alert(s)`;
+        let alertsHtml = '<div class="alerts-list">';
+        activeAlerts.forEach(a => {
+          const icon = a.type === 'error' ? '🔴' : a.type === 'warning' ? '🟡' : '🔵';
+          alertsHtml += `<div class="alert-item alert-${a.type}" data-category="${a.category}">
+            <span>${icon} ${a.message}</span>
+            <button class="alert-dismiss" onclick="dismissAlert('${a.category}')" title="Dismiss">×</button>
+          </div>`;
+        });
+        alertsHtml += '</div>';
+        document.getElementById('alerts-pill').insertAdjacentHTML('afterend', alertsHtml);
+      } else {
+        document.getElementById('alerts-pill').style.display = 'none';
+        const existingAlerts = document.querySelector('.alerts-list');
+        if (existingAlerts) existingAlerts.remove();
+      }
+    } else {
+      document.getElementById('alerts-pill').style.display = 'none';
+      const existingAlerts = document.querySelector('.alerts-list');
+      if (existingAlerts) existingAlerts.remove();
     }
   } catch (err) { console.error('Metrics error:', err); }
 }
@@ -708,3 +730,21 @@ async function rejectUser(id) {
 function formatSeconds(s) { return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; }
 function escapeHtml(s) { return (s || '').replace(/[&<>'"]/g, t => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[t] || t)); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+function dismissAlert(category) {
+  const dismissed = JSON.parse(localStorage.getItem('dismissedAlerts') || '[]');
+  if (!dismissed.includes(category)) {
+    dismissed.push(category);
+    localStorage.setItem('dismissedAlerts', JSON.stringify(dismissed));
+  }
+  const el = document.querySelector(`.alert-item[data-category="${category}"]`);
+  if (el) el.remove();
+  const remaining = document.querySelectorAll('.alert-item');
+  if (remaining.length === 0) {
+    document.getElementById('alerts-pill').style.display = 'none';
+    const list = document.querySelector('.alerts-list');
+    if (list) list.remove();
+  } else {
+    document.getElementById('alerts-text').textContent = `${remaining.length} alert(s)`;
+  }
+}

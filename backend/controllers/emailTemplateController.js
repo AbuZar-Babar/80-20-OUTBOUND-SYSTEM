@@ -1,4 +1,4 @@
-const { EmailTemplateStore, LeadStore, ActivityLogStore } = require('../config/store');
+const { EmailTemplateStore, LeadStore, ActivityLogStore, SendingInboxStore } = require('../config/store');
 const { isMongoConnected } = require('../config/db');
 const EmailTemplate = require('../models/EmailTemplate');
 const ActivityLog = require('../models/ActivityLog');
@@ -89,6 +89,9 @@ const sendTemplateEmail = async (req, res, next) => {
     if (!lead) return res.status(404).json({ success: false, message: 'Lead not found.' });
     if (!lead.contact.email) return res.status(400).json({ success: false, message: 'Lead has no email.' });
     if (lead.suppression?.email) return res.status(400).json({ success: false, message: 'Email suppressed.' });
+    if (lead.emailSequence?.status === 'stopped') {
+      return res.status(400).json({ success: false, message: `Email sequence stopped (${lead.emailSequence.stopReason || 'reply/booking'}). Cold email halted.` });
+    }
 
     const template = await EmailTemplateStore.findById(templateId);
     if (!template) return res.status(404).json({ success: false, message: 'Template not found.' });
@@ -115,6 +118,7 @@ const sendTemplateEmail = async (req, res, next) => {
         'emailSequence.lastSentDate': new Date(),
         'emailSequence.emailsSent': (lead.emailSequence?.emailsSent || 0) + 1
       });
+      await SendingInboxStore.incrementEmail(req.user._id);
       await ActivityLogStore.create({
         leadId, userId: req.user._id, action: 'email', channel: 'email', direction: 'outbound',
         notes: `Template: ${template.name} — Subject: ${subject}`

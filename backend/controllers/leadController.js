@@ -274,6 +274,8 @@ const workLead = async (req, res, next) => {
       case 'meeting-booked':
         updateData.coldOutreachStopped = true;
         updateData.nextAction = 'none';
+        updateData['emailSequence.status'] = 'stopped';
+        updateData['emailSequence.stopReason'] = 'meeting-booked';
         break;
       case 'not-interested':
       case 'wrong-number':
@@ -281,6 +283,8 @@ const workLead = async (req, res, next) => {
       case 'opted-out':
         updateData.coldOutreachStopped = true;
         updateData.nextAction = 'none';
+        updateData['emailSequence.status'] = 'stopped';
+        updateData['emailSequence.stopReason'] = outcome;
         if (outcome === 'dnc' || outcome === 'opted-out') {
           updateData.suppression = { phone: true, email: true, sms: true, whatsapp: true };
         }
@@ -388,7 +392,9 @@ const bookLead = async (req, res, next) => {
       nextAction: 'none',
       lastAction: 'Meeting booked',
       lastActionDate: new Date(),
-      booking: { booked: true, meetingDate: meetingDate ? new Date(meetingDate) : null, meetingTimezone, closer, meetingLink }
+      booking: { booked: true, meetingDate: meetingDate ? new Date(meetingDate) : null, meetingTimezone, closer, meetingLink },
+      'emailSequence.status': 'stopped',
+      'emailSequence.stopReason': 'meeting-booked'
     });
 
     await ActivityLogStore.create({ leadId, userId: req.user._id, action: 'booking', notes: `Booked with ${closer || 'closer'} for ${meetingDate || 'TBD'}` });
@@ -474,4 +480,104 @@ const checkContactHours = async (req, res, next) => {
   }
 };
 
-module.exports = { upload, uploadLeads, getLeads, getLeadById, updateLead, deleteLead, getDailyQueue, workLead, assignLeads, bulkAssign, addNote, bookLead, suppressLead, reassignLead, checkContactHours };
+const exportBookedLeads = async (req, res, next) => {
+  try {
+    const { format = 'json' } = req.query;
+    let leads;
+
+    if (isMongoConnected()) {
+      const query = { status: 'meeting-booked' };
+      if (req.user.role === 'salesperson') query.userId = req.user._id;
+      leads = await Lead.find(query).sort({ 'booking.meetingDate': -1 }).lean();
+    } else {
+      const allLeads = await LeadStore.findByUser(req.user._id);
+      leads = allLeads.filter(l => l.status === 'meeting-booked');
+    }
+
+    const exportData = leads.map(l => ({
+      name: l.contact?.name || '',
+      email: l.contact?.email || '',
+      phone: l.contact?.phone || '',
+      company: l.company?.name || '',
+      meetingDate: l.booking?.meetingDate || '',
+      meetingTimezone: l.booking?.meetingTimezone || '',
+      closer: l.booking?.closer || '',
+      meetingLink: l.booking?.meetingLink || '',
+      lastAction: l.lastAction || '',
+      lastActionDate: l.lastActionDate || ''
+    }));
+
+    if (format === 'csv') {
+      if (exportData.length === 0) {
+        return res.status(200).send('name,email,phone,company,meetingDate,meetingTimezone,closer,meetingLink\n');
+      }
+      const headers = Object.keys(exportData[0]).join(',');
+      const rows = exportData.map(r => Object.values(r).map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+      const csv = [headers, ...rows].join('\n');
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="booked-leads.csv"');
+      return res.status(200).send(csv);
+    }
+
+    res.status(200).json({ success: true, count: exportData.length, data: exportData });
+  } catch (err) { next(err); }
+};
+
+const crmHandoff = async (req, res, next) => {
+  try {
+    const { leadIds } = req.body;
+    const webhookUrl = req.user.crmWebhookUrl;
+
+    if (!webhookUrl) {
+      return res.status(400).json({ success: false, message: 'No CRM webhook URL configured on your profile.' });
+    }
+
+    const ids = leadIds && Array.isArray(leadIds) ? leadIds : [];
+    let leads;
+    if (ids.length > 0) {
+      leads = [];
+      for (const id of ids) {
+        const lead = await LeadStore.findById(id);
+        if (lead) leads.push(lead);
+      }
+    } else {
+      if (isMongoConnected()) {
+        const query = { status: 'meeting-booked' };
+        if (req.user.role === 'salesperson') query.userId = req.user._id;
+        leads = await Lead.find(query).lean();
+      } else {
+        const allLeads = await LeadStore.findByUser(req.user._id);
+        leads = allLeads.filter(l => l.status === 'meeting-booked');
+      }
+    }
+
+    const payload = leads.map(l => ({
+      name: l.contact?.name || '',
+      email: l.contact?.email || '',
+      phone: l.contact?.phone || '',
+      company: l.company?.name || '',
+      position: l.contact?.position || '',
+      meetingDate: l.booking?.meetingDate || '',
+      meetingTimezone: l.booking?.meetingTimezone || '',
+      closer: l.booking?.closer || '',
+      meetingLink: l.booking?.meetingLink || '',
+      lastAction: l.lastAction || '',
+      lastActionDate: l.lastActionDate || ''
+    }));
+
+    try {
+      const fetch = globalThis.fetch || require('node-fetch');
+      await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leads: payload, exportedBy: req.user.name, exportedAt: new Date().toISOString() })
+      });
+    } catch (e) {
+      return res.status(500).json({ success: false, message: `Webhook delivery failed: ${e.message}` });
+    }
+
+    res.status(200).json({ success: true, message: `${payload.length} leads sent to CRM webhook.`, data: { sent: payload.length } });
+  } catch (err) { next(err); }
+};
+
+module.exports = { upload, uploadLeads, getLeads, getLeadById, updateLead, deleteLead, getDailyQueue, workLead, assignLeads, bulkAssign, addNote, bookLead, suppressLead, reassignLead, checkContactHours, exportBookedLeads, crmHandoff };

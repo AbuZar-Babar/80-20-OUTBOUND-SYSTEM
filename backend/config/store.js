@@ -13,6 +13,8 @@ const Campaign = require('../models/Campaign');
 const ActivityLog = require('../models/ActivityLog');
 const EmailTemplate = require('../models/EmailTemplate');
 const LoginSession = require('../models/LoginSession');
+const SendingInbox = require('../models/SendingInbox');
+const EmailSequence = require('../models/EmailSequence');
 
 // Zero-DB local persistence
 const DATA_DIR = path.join(__dirname, '../../data');
@@ -113,6 +115,18 @@ const UserStore = {
 
   async matchPassword(enteredPassword, hashedPassword) {
     return await bcrypt.compare(enteredPassword, hashedPassword);
+  },
+
+  async updateProfile(id, updateData) {
+    if (isMongoConnected()) {
+      return await User.findByIdAndUpdate(id, updateData, { new: true }).select('-password').lean();
+    }
+    const idx = store.users.findIndex(u => u._id === id);
+    if (idx === -1) return null;
+    store.users[idx] = { ...store.users[idx], ...updateData };
+    saveStore();
+    const { password: _, ...rest } = store.users[idx];
+    return rest;
   },
 
   async findPendingUsers() {
@@ -250,6 +264,30 @@ const MessageStore = {
     return store.messages
       .filter(m => m.userId === userId.toString())
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  },
+
+  async findOneAndUpdate(query, updateData) {
+    if (isMongoConnected()) {
+      return await Message.findOneAndUpdate(query, updateData, { new: true }).lean();
+    }
+    const idx = store.messages.findIndex(m => {
+      if (query.messageSid && m.messageSid !== query.messageSid) return false;
+      if (query.to && m.to !== query.to) return false;
+      return true;
+    });
+    if (idx === -1) return null;
+    store.messages[idx] = { ...store.messages[idx], ...updateData };
+    saveStore();
+    return store.messages[idx];
+  },
+
+  async findLastByToPhone(toPhone) {
+    if (isMongoConnected()) {
+      return await Message.findOne({ to: toPhone, direction: 'outbound' }).sort({ createdAt: -1 }).lean();
+    }
+    return store.messages
+      .filter(m => m.to === toPhone && m.direction === 'outbound')
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0] || null;
   }
 };
 
@@ -624,4 +662,122 @@ const LoginSessionStore = {
   }
 };
 
-module.exports = { UserStore, CallStore, MessageStore, ContactStore, LeadStore, CampaignStore, ActivityLogStore, EmailTemplateStore, LoginSessionStore };
+// --- SendingInbox Operations (per-inbox daily counters) ---
+const SendingInboxStore = {
+  async getToday(userId) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (isMongoConnected()) {
+      let inbox = await SendingInbox.findOne({ userId, date: today }).lean();
+      if (!inbox) {
+        inbox = await SendingInbox.create({ userId, date: today, emailsSent: 0, smsSent: 0, callsMade: 0, status: 'healthy' });
+        return inbox.toObject ? inbox.toObject() : inbox;
+      }
+      return inbox;
+    }
+    if (!store.sendingInboxes) store.sendingInboxes = [];
+    let inbox = store.sendingInboxes.find(i => i.userId === userId && i.date === today);
+    if (!inbox) {
+      inbox = { _id: generateId(), userId, date: today, emailsSent: 0, smsSent: 0, callsMade: 0, status: 'healthy' };
+      store.sendingInboxes.push(inbox);
+      saveStore();
+    }
+    return inbox;
+  },
+
+  async incrementEmail(userId) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (isMongoConnected()) {
+      return await SendingInbox.findOneAndUpdate(
+        { userId, date: today },
+        { $inc: { emailsSent: 1 }, $setOnInsert: { status: 'healthy' } },
+        { upsert: true, new: true }
+      ).lean();
+    }
+    const inbox = await this.getToday(userId);
+    inbox.emailsSent = (inbox.emailsSent || 0) + 1;
+    saveStore();
+    return inbox;
+  },
+
+  async incrementSms(userId) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (isMongoConnected()) {
+      return await SendingInbox.findOneAndUpdate(
+        { userId, date: today },
+        { $inc: { smsSent: 1 }, $setOnInsert: { status: 'healthy' } },
+        { upsert: true, new: true }
+      ).lean();
+    }
+    const inbox = await this.getToday(userId);
+    inbox.smsSent = (inbox.smsSent || 0) + 1;
+    saveStore();
+    return inbox;
+  },
+
+  async incrementCalls(userId) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (isMongoConnected()) {
+      return await SendingInbox.findOneAndUpdate(
+        { userId, date: today },
+        { $inc: { callsMade: 1 }, $setOnInsert: { status: 'healthy' } },
+        { upsert: true, new: true }
+      ).lean();
+    }
+    const inbox = await this.getToday(userId);
+    inbox.callsMade = (inbox.callsMade || 0) + 1;
+    saveStore();
+    return inbox;
+  },
+
+  async setStatus(userId, status) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (isMongoConnected()) {
+      return await SendingInbox.findOneAndUpdate({ userId, date: today }, { status }, { new: true }).lean();
+    }
+    const inbox = await this.getToday(userId);
+    inbox.status = status;
+    saveStore();
+    return inbox;
+  }
+};
+
+// --- EmailSequence Operations (drip campaigns) ---
+const EmailSequenceStore = {
+  async create(data) {
+    if (isMongoConnected()) return await EmailSequence.create(data);
+    if (!store.emailSequences) store.emailSequences = [];
+    const seq = { _id: generateId(), ...data, createdAt: new Date().toISOString() };
+    store.emailSequences.push(seq);
+    saveStore();
+    return seq;
+  },
+  async findAll() {
+    if (isMongoConnected()) return await EmailSequence.find({ active: true }).sort({ createdAt: -1 }).lean();
+    if (!store.emailSequences) return [];
+    return store.emailSequences.filter(s => s.active !== false);
+  },
+  async findById(id) {
+    if (isMongoConnected()) return await EmailSequence.findById(id).lean();
+    if (!store.emailSequences) return null;
+    return store.emailSequences.find(s => s._id === id) || null;
+  },
+  async update(id, data) {
+    if (isMongoConnected()) return await EmailSequence.findByIdAndUpdate(id, data, { new: true }).lean();
+    if (!store.emailSequences) return null;
+    const idx = store.emailSequences.findIndex(s => s._id === id);
+    if (idx === -1) return null;
+    store.emailSequences[idx] = { ...store.emailSequences[idx], ...data };
+    saveStore();
+    return store.emailSequences[idx];
+  },
+  async delete(id) {
+    if (isMongoConnected()) { await EmailSequence.findByIdAndDelete(id); return true; }
+    if (!store.emailSequences) return false;
+    const len = store.emailSequences.length;
+    store.emailSequences = store.emailSequences.filter(s => s._id !== id);
+    if (store.emailSequences.length < len) { saveStore(); return true; }
+    return false;
+  }
+};
+
+module.exports = { UserStore, CallStore, MessageStore, ContactStore, LeadStore, CampaignStore, ActivityLogStore, EmailTemplateStore, LoginSessionStore, SendingInboxStore, EmailSequenceStore };

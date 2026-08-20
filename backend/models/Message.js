@@ -4,7 +4,11 @@ const messageSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
+    index: true
+  },
+  leadId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Lead',
     index: true
   },
   messageSid: {
@@ -27,6 +31,24 @@ const messageSchema = new mongoose.Schema({
   status: {
     type: String,
     default: 'queued'
+  },
+  channel: {
+    type: String,
+    enum: ['sms', 'whatsapp'],
+    default: 'sms'
+  },
+  direction: {
+    type: String,
+    enum: ['inbound', 'outbound'],
+    default: 'outbound'
+  },
+  errorCode: {
+    type: String,
+    default: ''
+  },
+  errorMessage: {
+    type: String,
+    default: ''
   },
   createdAt: {
     type: Date,

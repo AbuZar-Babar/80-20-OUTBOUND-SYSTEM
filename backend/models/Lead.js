@@ -73,7 +73,11 @@ const leadSchema = new mongoose.Schema({
     meetingLink: { type: String }
   },
   emailSequence: {
-    active: { type: Boolean, default: true },
+    status: { type: String, enum: ['active', 'stopped'], default: 'active' },
+    stopReason: { type: String, default: '' },
+    sequenceId: { type: mongoose.Schema.Types.ObjectId, ref: 'EmailSequence', default: null },
+    currentStep: { type: Number, default: 0 },
+    nextSendAt: { type: Date, default: null },
     lastSentDate: { type: Date },
     emailsSent: { type: Number, default: 0 }
   },

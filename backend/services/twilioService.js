@@ -51,15 +51,50 @@ const makeOutboundCall = async (to, twimlUrl, statusUrl) => {
  * Sends an SMS message via Twilio Messaging API.
  * @param {string} to Recipient phone number (E.164)
  * @param {string} body SMS message content
+ * @param {string} [statusCallback] Optional URL for delivery status webhook
  */
-const sendSmsMessage = async (to, body) => {
+const sendSmsMessage = async (to, body, statusCallback) => {
   const { client, fromNumber } = getTwilioClient();
 
-  const message = await client.messages.create({
+  const payload = {
     body: body,
     to: to,
     from: fromNumber
-  });
+  };
+  if (statusCallback) {
+    payload.statusCallback = statusCallback;
+  }
+
+  const message = await client.messages.create(payload);
+
+  return {
+    messageSid: message.sid,
+    from: fromNumber,
+    to: to,
+    body: body,
+    status: message.status || 'queued'
+  };
+};
+
+/**
+ * Sends a WhatsApp message via Twilio Messaging API.
+ * @param {string} to Recipient phone number (E.164)
+ * @param {string} body WhatsApp message content
+ * @param {string} [statusCallback] Optional URL for delivery status webhook
+ */
+const sendWhatsAppMessage = async (to, body, statusCallback) => {
+  const { client, fromNumber } = getTwilioClient();
+
+  const payload = {
+    body: body,
+    to: `whatsapp:${to}`,
+    from: `whatsapp:${fromNumber}`
+  };
+  if (statusCallback) {
+    payload.statusCallback = statusCallback;
+  }
+
+  const message = await client.messages.create(payload);
 
   return {
     messageSid: message.sid,
@@ -72,5 +107,6 @@ const sendSmsMessage = async (to, body) => {
 
 module.exports = {
   makeOutboundCall,
-  sendSmsMessage
+  sendSmsMessage,
+  sendWhatsAppMessage
 };

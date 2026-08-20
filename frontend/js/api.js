@@ -44,6 +44,7 @@ const API = {
   register: (name, email, password) => apiRequest('/auth/register', 'POST', { name, email, password }),
   login: (email, password) => apiRequest('/auth/login', 'POST', { email, password }),
   getMe: () => apiRequest('/auth/me', 'GET'),
+  updateProfile: (data) => apiRequest('/auth/profile', 'PUT', data),
 
   makeCall: (to) => apiRequest('/calls', 'POST', { to }),
   getCalls: () => apiRequest('/calls', 'GET'),
@@ -96,9 +97,20 @@ const API = {
   updateTemplate: (id, data) => apiRequest(`/email/templates/${id}`, 'PUT', data),
   deleteTemplate: (id) => apiRequest(`/email/templates/${id}`, 'DELETE'),
   sendTemplateEmail: (data) => apiRequest('/email/send-template', 'POST', data),
+  getInboxHealth: () => apiRequest('/email/inbox-health', 'GET'),
 
   reassignLead: (leadId, userId) => apiRequest('/leads/reassign', 'POST', { leadId, userId }),
   checkContactHours: (leadId) => apiRequest(`/leads/contact-hours?leadId=${leadId}`, 'GET'),
+  exportBookedLeads: (format = 'json') => apiRequest(`/leads/export/booked?format=${format}`, 'GET'),
+  crmHandoff: (leadIds) => apiRequest('/leads/crm-handoff', 'POST', { leadIds }),
+
+  sendWhatsApp: (data) => apiRequest('/messages/whatsapp', 'POST', data),
+
+  getSequences: () => apiRequest('/drip/sequences', 'GET'),
+  createSequence: (data) => apiRequest('/drip/sequences', 'POST', data),
+  updateSequence: (id, data) => apiRequest(`/drip/sequences/${id}`, 'PUT', data),
+  deleteSequence: (id) => apiRequest(`/drip/sequences/${id}`, 'DELETE'),
+  enrollLeadInSequence: (leadId, sequenceId) => apiRequest('/drip/enroll', 'POST', { leadId, sequenceId }),
 
   getMetrics: () => apiRequest('/manager/metrics', 'GET'),
   getActivity: (limit = 50) => apiRequest(`/manager/activity?limit=${limit}`, 'GET'),

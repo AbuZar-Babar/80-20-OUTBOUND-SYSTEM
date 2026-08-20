@@ -1,12 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
-const { upload, uploadLeads, getLeads, getLeadById, updateLead, deleteLead, getDailyQueue, workLead, assignLeads, bulkAssign, addNote, bookLead, suppressLead, reassignLead, checkContactHours } = require('../controllers/leadController');
+const { upload, uploadLeads, getLeads, getLeadById, updateLead, deleteLead, getDailyQueue, workLead, assignLeads, bulkAssign, addNote, bookLead, suppressLead, reassignLead, checkContactHours, exportBookedLeads, crmHandoff } = require('../controllers/leadController');
 
 router.post('/upload', protect, upload.single('csv'), uploadLeads);
 router.get('/', protect, getLeads);
 router.get('/queue', protect, getDailyQueue);
 router.get('/contact-hours', protect, checkContactHours);
+router.get('/export/booked', protect, exportBookedLeads);
+router.post('/crm-handoff', protect, crmHandoff);
 router.get('/:id', protect, getLeadById);
 router.put('/:id', protect, updateLead);
 router.delete('/:id', protect, deleteLead);

@@ -15,5 +15,11 @@
       "src": "/(.*)",
       "dest": "backend/server.js"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/drip/cron/process-drip",
+      "schedule": "*/30 * * * *"
+    }
   ]
 }
