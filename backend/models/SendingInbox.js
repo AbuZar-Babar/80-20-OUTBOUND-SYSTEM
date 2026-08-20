@@ -1,15 +1,49 @@
 const mongoose = require('mongoose');
 
 const sendingInboxSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    trim: true,
+    default: 'Default Inbox'
+  },
+  fromEmail: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  fromName: {
+    type: String,
+    default: ''
+  },
+  dailyLimit: {
+    type: Number,
+    default: 50
+  },
+  status: {
+    type: String,
+    enum: ['healthy', 'warming', 'throttled', 'flagged'],
+    default: 'healthy'
+  },
+  active: {
+    type: Boolean,
+    default: true
+  },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  dailyCounters: [{
+    date: { type: String, required: true },
+    emailsSent: { type: Number, default: 0 }
+  }],
+  // Backward compatibility fields
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
     index: true
   },
   date: {
     type: String,
-    required: true,
     index: true
   },
   emailsSent: {
@@ -24,17 +58,11 @@ const sendingInboxSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  status: {
-    type: String,
-    enum: ['healthy', 'warming', 'throttled', 'flagged'],
-    default: 'healthy'
-  },
   createdAt: {
     type: Date,
     default: Date.now
   }
 });
 
-sendingInboxSchema.index({ userId: 1, date: 1 }, { unique: true });
-
 module.exports = mongoose.model('SendingInbox', sendingInboxSchema);
+

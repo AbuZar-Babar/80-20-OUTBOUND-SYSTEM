@@ -140,9 +140,26 @@ const updateProfile = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+const getClosers = async (req, res, next) => {
+  try {
+    const users = await UserStore.findAllUsers();
+    const closers = users
+      .filter(u => u.active !== false && u.approved !== false)
+      .map(u => ({
+        _id: u._id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        calendarLink: u.calendarLink || ''
+      }));
+    res.status(200).json({ success: true, count: closers.length, data: closers });
+  } catch (error) { next(error); }
+};
+
 module.exports = {
   registerUser,
   loginUser,
   getMe,
-  updateProfile
+  updateProfile,
+  getClosers
 };

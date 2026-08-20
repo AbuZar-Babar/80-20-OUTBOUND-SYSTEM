@@ -51,9 +51,13 @@
           <h2 id="page-title">Overview</h2>
           <p id="page-subtitle">Sales dashboard and metrics</p>
         </div>
-        <div class="status-pill" id="alerts-pill" style="display:none">
-          <span class="status-pulse-dot"></span>
-          <span id="alerts-text">0 alerts</span>
+        <div style="display:flex;align-items:center;gap:0.5rem">
+          <button id="btn-toggle-break" class="btn btn-sm btn-outline" onclick="handleToggleBreak()">☕ Start Break</button>
+          <button id="btn-open-profile" class="btn btn-sm btn-outline" onclick="openProfileModal()">⚙️ Profile</button>
+          <div class="status-pill" id="alerts-pill" style="display:none">
+            <span class="status-pulse-dot"></span>
+            <span id="alerts-text">0 alerts</span>
+          </div>
         </div>
       </header>
 
@@ -74,9 +78,11 @@
         </div>
         <div class="metrics-row">
           <div class="metric-card"><div class="metric-data"><span>Daily Target</span><div class="metric-value" id="m-target-progress">--</div></div><div class="metric-icon icon-indigo">🎯</div></div>
+          <div class="metric-card"><div class="metric-data"><span>Calls / Hour</span><div class="metric-value" id="m-calls-per-hour">0</div></div><div class="metric-icon icon-cyan">⚡</div></div>
           <div class="metric-card"><div class="metric-data"><span>Active Time</span><div class="metric-value" id="m-active-time">00:00</div></div><div class="metric-icon icon-cyan">⏱️</div></div>
+          <div class="metric-card"><div class="metric-data"><span>Break Time</span><div class="metric-value" id="m-break-time" style="color:var(--accent-amber)">00:00</div></div><div class="metric-icon icon-amber">☕</div></div>
           <div class="metric-card"><div class="metric-data"><span>Dialing Time</span><div class="metric-value" id="m-dialing-time">00:00</div></div><div class="metric-icon icon-emerald">📞</div></div>
-          <div class="metric-card" style="opacity:0.3"><div class="metric-data"><span>Future</span><div class="metric-value">—</div></div><div class="metric-icon icon-rose">🔮</div></div>
+          <div class="metric-card"><div class="metric-data"><span>Booking Rate</span><div class="metric-value" id="m-booking-rate">0%</div></div><div class="metric-icon icon-rose">📈</div></div>
         </div>
       </section>
 
@@ -86,6 +92,7 @@
           <h3 class="panel-title">📋 Daily Queue</h3>
           <button class="btn btn-outline btn-sm" onclick="fetchQueue()">Refresh</button>
         </div>
+        <div id="queue-replies" style="margin-bottom:1rem"></div>
         <div id="queue-overdue" style="margin-bottom:1rem"></div>
         <div id="queue-due-today" style="margin-bottom:1rem"></div>
         <div id="queue-interested" style="margin-bottom:1rem"></div>
@@ -145,8 +152,16 @@
           </div>
           <div id="booking-form" style="display:none;margin-top:1rem">
             <div class="form-group"><label class="form-label">Meeting Date & Time</label><input type="datetime-local" id="booking-datetime" class="input-control"></div>
-            <div class="form-group"><label class="form-label">Closer Name</label><input type="text" id="booking-closer" class="input-control" placeholder="Closer name"></div>
-            <div class="form-group"><label class="form-label">Meeting Link</label><input type="url" id="booking-link" class="input-control" placeholder="https://..."></div>
+            <div class="form-group">
+              <label class="form-label">Select Closer</label>
+              <select id="booking-closer-select" class="input-control" onchange="handleCloserSelect()">
+                <option value="">-- Select Closer --</option>
+              </select>
+              <div style="margin-top:0.4rem">
+                <a id="closer-calendar-btn" href="#" target="_blank" class="btn btn-sm btn-outline" style="display:none">📅 Open Closer Calendar</a>
+              </div>
+            </div>
+            <div class="form-group"><label class="form-label">Meeting / Calendar Link</label><input type="url" id="booking-link" class="input-control" placeholder="https://..."></div>
           </div>
           <button id="btn-submit-outcome" class="btn btn-primary" style="width:100%;margin-top:1rem;padding:0.85rem;display:none" onclick="submitOutcome()">Submit Outcome</button>
         </div>
@@ -196,11 +211,13 @@
         <div class="tab-bar" style="margin-bottom:1rem">
           <button class="tab-btn active" onclick="showEmailTab('compose')">Compose</button>
           <button class="tab-btn" onclick="showEmailTab('templates')">Templates</button>
+          <button class="tab-btn" onclick="showEmailTab('inboxes')">Sending Inboxes</button>
         </div>
         <div id="email-compose-tab">
           <form id="form-send-email">
             <div class="form-group"><label class="form-label">Lead ID</label><input type="text" id="email-lead-id" class="input-control" placeholder="Lead ID" required></div>
             <div class="form-group"><label class="form-label">To Email</label><input type="email" id="email-to" class="input-control" placeholder="lead@example.com" required></div>
+            <div class="form-group"><label class="form-label">Sending Inbox</label><select id="email-inbox-select" class="input-control"><option value="">Default (System SendGrid)</option></select></div>
             <div class="form-group"><label class="form-label">Subject</label><input type="text" id="email-subject" class="input-control" placeholder="Email subject" required></div>
             <div class="form-group" style="flex:1"><label class="form-label">Body (HTML supported)</label><textarea id="email-body" class="input-control" rows="6" required style="resize:vertical;min-height:150px;margin-top:0.4rem"></textarea></div>
             <div class="form-group"><label class="form-label">Use Template (optional)</label><select id="email-template-select" class="input-control" onchange="applyEmailTemplate()"><option value="">No template</option></select></div>
@@ -212,6 +229,10 @@
           <div class="panel-header"><h3 class="panel-title" style="font-size:1rem">Email Templates</h3><button class="btn btn-primary btn-sm" onclick="showTemplateModal()">+ New Template</button></div>
           <div id="templates-list"><div class="empty-placeholder">Loading templates...</div></div>
           <div style="margin-top:0.75rem;font-size:0.75rem;color:var(--text-muted)">Merge fields: {{name}}, {{first_name}}, {{company}}, {{position}}, {{city}}, {{country}}, {{phone}}, {{email}}, {{website}}, {{niche}}</div>
+        </div>
+        <div id="email-inboxes-tab" style="display:none">
+          <div class="panel-header"><h3 class="panel-title" style="font-size:1rem">Connected Sending Inboxes</h3><button class="btn btn-primary btn-sm" onclick="showCreateInboxModal()">+ Add Inbox</button></div>
+          <div id="inboxes-list"><div class="empty-placeholder">Loading inboxes...</div></div>
         </div>
       </section>
 
@@ -299,6 +320,7 @@
         <button class="btn btn-outline btn-sm" onclick="showReassignModal()">Reassign</button>
         <button class="btn btn-outline btn-sm" onclick="checkLeadContactHours()">Check Hours</button>
         <button class="btn btn-sm btn-emerald" onclick="sendWhatsAppFromLead()">📱 WhatsApp</button>
+        <button class="btn btn-sm btn-indigo" id="btn-lead-crm-handoff" onclick="triggerCurrentLeadCrmHandoff()">🚀 Handoff to CRM</button>
         <button class="btn btn-sm btn-outline" onclick="toggleLeadSuppression('sms')" title="Toggle SMS suppression">🚫 SMS</button>
         <button class="btn btn-sm btn-outline" onclick="toggleLeadSuppression('whatsapp')" title="Toggle WhatsApp suppression">🚫 WA</button>
       </div>
@@ -339,6 +361,44 @@
         <div class="form-group"><label class="form-label">Category</label><select id="wa-tpl-category" class="input-control"><option value="cold-outreach">Cold Outreach</option><option value="follow-up">Follow Up</option><option value="booking">Booking</option><option value="general">General</option></select></div>
         <div class="form-group"><label class="form-label">Message Body (use {{field}} for merge)</label><textarea id="wa-tpl-body" class="input-control" rows="6" required style="resize:vertical;min-height:140px" placeholder="Hi {{first_name}}, I noticed you work at {{company}}..."></textarea></div>
         <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1rem">Save Template</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Profile Settings Modal -->
+  <div class="modal-overlay" id="profile-modal">
+    <div class="modal-box" style="max-width:500px">
+      <div class="panel-header" style="margin-bottom:1.25rem"><h3>Profile & CRM Settings</h3><button class="btn btn-outline btn-sm" onclick="closeModal('profile-modal')">✕</button></div>
+      <form id="form-profile-settings" onsubmit="handleSaveProfile(event)">
+        <div class="form-group">
+          <label class="form-label">Closer Calendar Link</label>
+          <input type="url" id="prof-calendar-link" class="input-control" placeholder="https://calendly.com/your-name">
+          <small style="color:var(--text-muted);font-size:0.75rem">Used when booking meetings with you as a closer.</small>
+        </div>
+        <div class="form-group" style="margin-top:0.75rem">
+          <label class="form-label">CRM Webhook URL</label>
+          <input type="url" id="prof-crm-webhook" class="input-control" placeholder="https://hooks.zapier.com/hooks/catch/...">
+          <small style="color:var(--text-muted);font-size:0.75rem">Endpoint called when handoff to CRM is triggered.</small>
+        </div>
+        <div class="form-group" style="margin-top:0.75rem">
+          <label class="form-label">Timezone</label>
+          <input type="text" id="prof-timezone" class="input-control" placeholder="America/New_York">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1.25rem">Save Profile</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Create Sending Inbox Modal -->
+  <div class="modal-overlay" id="inbox-modal">
+    <div class="modal-box" style="max-width:500px">
+      <div class="panel-header" style="margin-bottom:1.25rem"><h3>Add Sending Inbox</h3><button class="btn btn-outline btn-sm" onclick="closeModal('inbox-modal')">✕</button></div>
+      <form id="form-create-inbox" onsubmit="handleCreateInbox(event)">
+        <div class="form-group"><label class="form-label">Inbox Name / Label</label><input type="text" id="inbox-name" class="input-control" placeholder="Outreach Inbox 1" required></div>
+        <div class="form-group" style="margin-top:0.75rem"><label class="form-label">From Email</label><input type="email" id="inbox-from-email" class="input-control" placeholder="rep@company.com" required></div>
+        <div class="form-group" style="margin-top:0.75rem"><label class="form-label">From Name</label><input type="text" id="inbox-from-name" class="input-control" placeholder="Rep Name"></div>
+        <div class="form-group" style="margin-top:0.75rem"><label class="form-label">Daily Send Limit</label><input type="number" id="inbox-daily-limit" class="input-control" value="50" min="1" max="2000" required></div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1.25rem">Create Inbox</button>
       </form>
     </div>
   </div>

@@ -9,7 +9,21 @@ const getDashboardMetrics = async (req, res, next) => {
     if (req.user.role === 'salesperson') {
       const metrics = await LeadStore.getManagerMetrics(req.user._id);
       const stats = await ActivityLogStore.getUserStats(req.user._id);
-      return res.status(200).json({ success: true, data: { ...metrics, ...stats } });
+      const sessionStats = await LoginSessionStore.getUserStats(req.user._id);
+      const activeHours = (sessionStats.activeTimeSeconds || 0) / 3600;
+      const callsPerHour = activeHours > 0 ? (stats.callsToday / activeHours).toFixed(1) : (stats.callsToday || 0);
+      const bookingRate = metrics.contacted > 0 ? ((metrics.booked / metrics.contacted) * 100).toFixed(1) + '%' : '0%';
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          ...metrics,
+          ...stats,
+          ...sessionStats,
+          callsPerHour,
+          bookingRate
+        }
+      });
     }
 
     const users = await UserStore.findAllUsers();
@@ -21,7 +35,15 @@ const getDashboardMetrics = async (req, res, next) => {
       const metrics = await LeadStore.getManagerMetrics(sp._id);
       const stats = await ActivityLogStore.getUserStats(sp._id);
       const sessionStats = await LoginSessionStore.getUserStats(sp._id);
-      allMetrics.push({ user: { _id: sp._id, name: sp.name, email: sp.email }, metrics, stats: { ...stats, ...sessionStats } });
+      const activeHours = (sessionStats.activeTimeSeconds || 0) / 3600;
+      const callsPerHour = activeHours > 0 ? (stats.callsToday / activeHours).toFixed(1) : (stats.callsToday || 0);
+      const bookingRate = metrics.contacted > 0 ? ((metrics.booked / metrics.contacted) * 100).toFixed(1) + '%' : '0%';
+
+      allMetrics.push({
+        user: { _id: sp._id, name: sp.name, email: sp.email },
+        metrics: { ...metrics, bookingRate },
+        stats: { ...stats, ...sessionStats, callsPerHour }
+      });
       totalLeads += metrics.total;
       totalContacted += metrics.contacted;
       totalInterested += metrics.interested;
@@ -32,7 +54,15 @@ const getDashboardMetrics = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: {
-        overview: { totalLeads, totalContacted, totalInterested, totalBooked, totalOverdue, salespersonCount: salespeople.length },
+        overview: {
+          totalLeads,
+          totalContacted,
+          totalInterested,
+          totalBooked,
+          totalOverdue,
+          overallBookingRate: totalContacted > 0 ? ((totalBooked / totalContacted) * 100).toFixed(1) + '%' : '0%',
+          salespersonCount: salespeople.length
+        },
         salespeople: allMetrics
       }
     });

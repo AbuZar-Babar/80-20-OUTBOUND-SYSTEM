@@ -152,6 +152,10 @@ const handleInboundSms = async (req, res, next) => {
       await LeadStore.update(lead._id, {
         lastAction: `Inbound SMS: ${messageBody.substring(0, 100)}`,
         lastActionDate: new Date(),
+        hasUnansweredReply: true,
+        lastReplyText: messageBody.substring(0, 200),
+        lastReplyChannel: 'sms',
+        lastReplyAt: new Date(),
         'emailSequence.status': 'stopped',
         'emailSequence.stopReason': 'inbound-sms'
       });
@@ -278,6 +282,10 @@ const handleInboundWhatsApp = async (req, res, next) => {
       await LeadStore.update(lead._id, {
         lastAction: `Inbound WhatsApp: ${messageBody.substring(0, 100)}`,
         lastActionDate: new Date(),
+        hasUnansweredReply: true,
+        lastReplyText: messageBody.substring(0, 200),
+        lastReplyChannel: 'whatsapp',
+        lastReplyAt: new Date(),
         'emailSequence.status': 'stopped',
         'emailSequence.stopReason': 'inbound-whatsapp'
       });

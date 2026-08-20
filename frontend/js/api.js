@@ -98,6 +98,10 @@ const API = {
   deleteTemplate: (id) => apiRequest(`/email/templates/${id}`, 'DELETE'),
   sendTemplateEmail: (data) => apiRequest('/email/send-template', 'POST', data),
   getInboxHealth: () => apiRequest('/email/inbox-health', 'GET'),
+  getInboxes: () => apiRequest('/email/inboxes', 'GET'),
+  createInbox: (data) => apiRequest('/email/inboxes', 'POST', data),
+  updateInbox: (id, data) => apiRequest(`/email/inboxes/${id}`, 'PUT', data),
+  deleteInbox: (id) => apiRequest(`/email/inboxes/${id}`, 'DELETE'),
 
   reassignLead: (leadId, userId) => apiRequest('/leads/reassign', 'POST', { leadId, userId }),
   checkContactHours: (leadId) => apiRequest(`/leads/contact-hours?leadId=${leadId}`, 'GET'),
@@ -121,8 +125,11 @@ const API = {
   getActivity: (limit = 50) => apiRequest(`/manager/activity?limit=${limit}`, 'GET'),
   getAlerts: () => apiRequest('/manager/alerts', 'GET'),
 
+  getClosers: () => apiRequest('/auth/closers', 'GET'),
+
   recordLogin: () => apiRequest('/session/login', 'POST'),
   heartbeat: () => apiRequest('/session/heartbeat', 'POST'),
+  toggleBreak: () => apiRequest('/session/break/toggle', 'POST'),
   updateDialingTime: (seconds) => apiRequest('/session/dialing-time', 'POST', { seconds }),
   getSessionStats: (userId) => apiRequest(`/session/stats${userId ? '/' + userId : ''}`, 'GET')
 };

@@ -59,6 +59,22 @@ const leadSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  hasUnansweredReply: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  lastReplyText: {
+    type: String,
+    default: ''
+  },
+  lastReplyChannel: {
+    type: String,
+    default: ''
+  },
+  lastReplyAt: {
+    type: Date
+  },
   suppression: {
     phone: { type: Boolean, default: false },
     email: { type: Boolean, default: false },

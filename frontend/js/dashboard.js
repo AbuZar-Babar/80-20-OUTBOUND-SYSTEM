@@ -97,6 +97,12 @@ async function refreshDashboard() {
     document.getElementById('m-wa-today').textContent = m.whatsappToday || 0;
     document.getElementById('m-overdue').textContent = m.callbacksOverdue || 0;
 
+    const cphEl = document.getElementById('m-calls-per-hour');
+    if (cphEl) cphEl.textContent = m.callsPerHour || '0';
+
+    const brEl = document.getElementById('m-booking-rate');
+    if (brEl) brEl.textContent = m.bookingRate || (m.overview?.overallBookingRate || '0%');
+
     if (currentUser && currentUser.dailyLeadTarget) {
       const target = currentUser.dailyLeadTarget;
       const callsToday = m.callsToday || 0;
@@ -105,13 +111,24 @@ async function refreshDashboard() {
       if (el) el.innerHTML = `<span>${callsToday}/${target}</span><div style="width:100%;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin-top:4px"><div style="height:100%;width:${pct}%;background:${pct >= 100 ? 'var(--accent-emerald)' : 'var(--accent-primary)'};border-radius:2px"></div></div>`;
     }
 
-    if (currentUser && (currentUser.role === 'salesperson')) {
-      const ss = await API.getSessionStats().catch(() => null);
-      if (ss && ss.data) {
-        const atEl = document.getElementById('m-active-time');
-        const dtEl = document.getElementById('m-dialing-time');
-        if (atEl) atEl.textContent = formatSeconds(ss.data.activeTimeSeconds || 0);
-        if (dtEl) dtEl.textContent = formatSeconds(ss.data.dialingTimeSeconds || 0);
+    const ss = await API.getSessionStats().catch(() => null);
+    if (ss && ss.data) {
+      const atEl = document.getElementById('m-active-time');
+      const dtEl = document.getElementById('m-dialing-time');
+      const btEl = document.getElementById('m-break-time');
+      if (atEl) atEl.textContent = formatSeconds(ss.data.activeTimeSeconds || 0);
+      if (dtEl) dtEl.textContent = formatSeconds(ss.data.dialingTimeSeconds || 0);
+      if (btEl) btEl.textContent = formatSeconds(ss.data.breakTimeSeconds || 0);
+
+      const breakBtn = document.getElementById('btn-toggle-break');
+      if (breakBtn) {
+        if (ss.data.isOnBreak) {
+          breakBtn.innerHTML = '▶ Resume Work';
+          breakBtn.className = 'btn btn-sm btn-emerald';
+        } else {
+          breakBtn.innerHTML = '☕ Start Break';
+          breakBtn.className = 'btn btn-sm btn-outline';
+        }
       }
     }
 
@@ -150,6 +167,7 @@ async function fetchQueue() {
   try {
     const res = await API.getDailyQueue();
     const q = res.data;
+    renderQueueSection('queue-replies', '💬 Inbound Replies Needing Action', q.replies, '#ec4899');
     renderQueueSection('queue-overdue', '⚠️ Overdue Callbacks', q.overdue, '#f43f5e');
     renderQueueSection('queue-due-today', '📅 Due Today', q.dueToday, '#f59e0b');
     renderQueueSection('queue-interested', '🔥 Interested - Follow Up', q.interested, '#10b981');
@@ -165,10 +183,12 @@ function renderQueueSection(containerId, title, leads, color) {
     leads.map(l => `<div class="contact-card-item" style="cursor:pointer" onclick="startWorkingLead('${l._id}')">
       <div style="display:flex;align-items:center;gap:0.85rem">
         <div class="avatar-initial" style="background:${color}">${(l.contact?.name || '?')[0].toUpperCase()}</div>
-        <div><div style="font-weight:600;font-size:0.95rem">${escapeHtml(l.contact?.name || '')}</div>
-        <div style="font-size:0.8rem;color:var(--text-muted)">${l.contact?.phone || ''} ${l.contact?.email ? '| ' + l.contact.email : ''}</div>
-        ${l.callbackNote ? `<div style="font-size:0.75rem;color:${color}">📌 ${escapeHtml(l.callbackNote)}</div>` : ''}
-        ${l.company?.name ? `<div style="font-size:0.75rem;color:var(--text-muted)">${escapeHtml(l.company.name)}</div>` : ''}
+        <div>
+          <div style="font-weight:600;font-size:0.95rem">${escapeHtml(l.contact?.name || '')}</div>
+          <div style="font-size:0.8rem;color:var(--text-muted)">${l.contact?.phone || ''} ${l.contact?.email ? '| ' + l.contact.email : ''}</div>
+          ${l.hasUnansweredReply ? `<div style="font-size:0.75rem;color:#ec4899;font-weight:600">💬 Reply (${l.lastReplyChannel || 'inbound'}): "${escapeHtml(l.lastReplyText || '')}"</div>` : ''}
+          ${l.callbackNote ? `<div style="font-size:0.75rem;color:${color}">📌 ${escapeHtml(l.callbackNote)}</div>` : ''}
+          ${l.company?.name ? `<div style="font-size:0.75rem;color:var(--text-muted)">${escapeHtml(l.company.name)}</div>` : ''}
         </div>
       </div>
       <button class="btn btn-sm btn-emerald" onclick="event.stopPropagation();loadLeadForCall('${l._id}','${l.contact?.phone || ''}')">📞 Call</button>
@@ -186,6 +206,11 @@ async function startWorkingLead(leadId) {
     document.getElementById('email-to').value = lead.contact?.email || '';
     document.getElementById('sms-recipient-input').value = lead.contact?.phone || '';
 
+    const handoffBtn = document.getElementById('btn-lead-crm-handoff');
+    if (handoffBtn) {
+      handoffBtn.style.display = lead.status === 'meeting-booked' ? 'inline-flex' : 'none';
+    }
+
     const content = document.getElementById('lead-detail-content');
     content.innerHTML = `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;font-size:0.9rem">
@@ -197,7 +222,9 @@ async function startWorkingLead(leadId) {
         <div><strong>Status:</strong> <span class="badge badge-${lead.status === 'new' ? 'queued' : lead.status === 'interested' ? 'completed' : 'ringing'}">${lead.status}</span></div>
         <div><strong>Last Action:</strong> ${lead.lastAction || 'None'}</div>
         <div><strong>Next Action:</strong> ${lead.nextAction || 'N/A'}</div>
-      </div>`;
+      </div>
+      ${lead.hasUnansweredReply ? `<div style="margin-top:0.75rem;padding:0.5rem;background:rgba(236,72,153,0.15);border-radius:6px;font-size:0.85rem;color:#f472b6"><strong>💬 Latest Inbound Reply (${lead.lastReplyChannel || 'reply'}):</strong> ${escapeHtml(lead.lastReplyText || '')}</div>` : ''}
+      ${lead.booking?.booked ? `<div style="margin-top:0.75rem;padding:0.5rem;background:rgba(16,185,129,0.15);border-radius:6px;font-size:0.85rem;color:var(--accent-emerald)"><strong>📅 Meeting Booked:</strong> ${new Date(lead.booking.meetingDate).toLocaleString()} (Closer: ${escapeHtml(lead.booking.closer || 'N/A')}) ${lead.booking.meetingLink ? `<a href="${lead.booking.meetingLink}" target="_blank" style="color:var(--accent-cyan);margin-left:0.5rem">Link ↗</a>` : ''}</div>` : ''}`;
 
     const timelineEl = document.getElementById('lead-timeline');
     if (timeline && timeline.length > 0) {
@@ -315,11 +342,49 @@ function showCallbackForm() {
   document.getElementById('btn-submit-outcome').style.display = 'inline-flex';
 }
 
+let availableClosers = [];
+
+async function loadClosers() {
+  try {
+    const res = await API.getClosers();
+    availableClosers = res.data || [];
+    const select = document.getElementById('booking-closer-select');
+    if (select) {
+      select.innerHTML = '<option value="">-- Select Closer --</option>' +
+        availableClosers.map(c => `<option value="${c._id}" data-name="${escapeHtml(c.name)}" data-calendar="${escapeHtml(c.calendarLink || '')}">${escapeHtml(c.name)} (${c.role})</option>`).join('');
+    }
+  } catch (err) { console.error('Closers error:', err); }
+}
+
+function handleCloserSelect() {
+  const select = document.getElementById('booking-closer-select');
+  const selectedOpt = select?.options[select.selectedIndex];
+  const calBtn = document.getElementById('closer-calendar-btn');
+  const linkInput = document.getElementById('booking-link');
+  if (!selectedOpt || !selectedOpt.value) {
+    if (calBtn) calBtn.style.display = 'none';
+    return;
+  }
+  const calLink = selectedOpt.getAttribute('data-calendar');
+  if (calLink && calLink.trim() !== '') {
+    if (calBtn) {
+      calBtn.href = calLink;
+      calBtn.style.display = 'inline-block';
+    }
+    if (linkInput && (!linkInput.value || linkInput.value.trim() === '')) {
+      linkInput.value = calLink;
+    }
+  } else {
+    if (calBtn) calBtn.style.display = 'none';
+  }
+}
+
 function showBookingForm() {
   currentOutcome = 'meeting-booked';
   document.getElementById('booking-form').style.display = 'block';
   document.getElementById('callback-form').style.display = 'none';
   document.getElementById('btn-submit-outcome').style.display = 'inline-flex';
+  loadClosers();
 }
 
 async function submitOutcome() {
@@ -330,10 +395,14 @@ async function submitOutcome() {
 
   try {
     if (currentOutcome === 'meeting-booked') {
+      const closerSelect = document.getElementById('booking-closer-select');
+      const selectedOpt = closerSelect?.options[closerSelect.selectedIndex];
+      const closerName = selectedOpt?.getAttribute('data-name') || selectedOpt?.text || '';
+
       await API.bookLead({
         leadId: currentLeadId,
         meetingDate: document.getElementById('booking-datetime').value,
-        closer: document.getElementById('booking-closer').value,
+        closer: closerName,
         meetingLink: document.getElementById('booking-link').value
       });
     } else if (currentOutcome === 'callback') {
@@ -359,6 +428,10 @@ function resetCallPanel() {
   document.getElementById('outcome-panel').style.display = 'none';
   document.getElementById('callback-form').style.display = 'none';
   document.getElementById('booking-form').style.display = 'none';
+  const calBtn = document.getElementById('closer-calendar-btn');
+  if (calBtn) calBtn.style.display = 'none';
+  const closerSelect = document.getElementById('booking-closer-select');
+  if (closerSelect) closerSelect.value = '';
   document.getElementById('btn-submit-outcome').style.display = 'none';
   document.getElementById('btn-make-call').disabled = false;
   updateCallStatus('Ready', 'ready');
@@ -393,12 +466,16 @@ function initEmailActions() {
     const leadId = document.getElementById('email-lead-id').value.trim();
     const subject = document.getElementById('email-subject').value.trim();
     const body = document.getElementById('email-body').value.trim();
+    const inboxId = document.getElementById('email-inbox-select')?.value || undefined;
     if (!leadId || !subject || !body) { showToast('Fill in all fields.', 'error'); return; }
     try {
-      await API.sendEmail({ leadId, subject, body });
+      await API.sendEmail({ leadId, subject, body, inboxId });
       showToast('Email sent!', 'success');
       emailForm.reset();
       refreshDashboard();
+      if (document.getElementById('email-inboxes-tab').style.display !== 'none') {
+        fetchInboxes();
+      }
     } catch (err) { showToast(err.message, 'error'); }
   });
 }
@@ -408,8 +485,78 @@ function showEmailTab(tab) {
   event.target.classList.add('active');
   document.getElementById('email-compose-tab').style.display = tab === 'compose' ? 'block' : 'none';
   document.getElementById('email-templates-tab').style.display = tab === 'templates' ? 'block' : 'none';
+  document.getElementById('email-inboxes-tab').style.display = tab === 'inboxes' ? 'block' : 'none';
   if (tab === 'templates') fetchTemplates();
-  if (tab === 'compose') updateEmailLimitInfo();
+  if (tab === 'inboxes') fetchInboxes();
+  if (tab === 'compose') {
+    updateEmailLimitInfo();
+    fetchInboxes();
+  }
+}
+
+async function fetchInboxes() {
+  try {
+    const res = await API.getInboxes();
+    const inboxes = res.data || [];
+    const container = document.getElementById('inboxes-list');
+    const select = document.getElementById('email-inbox-select');
+
+    if (container) {
+      if (inboxes.length === 0) {
+        container.innerHTML = '<div class="empty-placeholder">No sending inboxes connected yet. Click "+ Add Inbox" to connect one.</div>';
+      } else {
+        container.innerHTML = inboxes.map(i => `
+          <div class="contact-card-item">
+            <div style="flex:1">
+              <div style="font-weight:600">${escapeHtml(i.name)} <span style="font-size:0.8rem;color:var(--text-muted)">(${escapeHtml(i.fromEmail)})</span></div>
+              <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">
+                Daily Limit: <strong>${i.dailyLimit}</strong> | Sent Today: <strong>${i.emailsSentToday || 0}</strong> | Remaining: <strong>${Math.max(0, i.dailyLimit - (i.emailsSentToday || 0))}</strong>
+              </div>
+              <div style="font-size:0.7rem;margin-top:4px">
+                <span class="badge badge-${(i.emailsSentToday || 0) >= i.dailyLimit ? 'failed' : 'completed'}">${(i.emailsSentToday || 0) >= i.dailyLimit ? 'Throttled / Limit Reached' : 'Healthy'}</span>
+              </div>
+            </div>
+            <div>
+              <button class="btn btn-sm btn-rose" onclick="deleteInbox('${i._id}')">🗑️</button>
+            </div>
+          </div>`).join('');
+      }
+    }
+
+    if (select) {
+      select.innerHTML = '<option value="">Default (System SendGrid)</option>' +
+        inboxes.map(i => `<option value="${i._id}">${escapeHtml(i.name)} (${i.fromEmail} - ${i.emailsSentToday || 0}/${i.dailyLimit} sent)</option>`).join('');
+    }
+  } catch (err) { console.error('Inboxes error:', err); }
+}
+
+function showCreateInboxModal() {
+  document.getElementById('inbox-modal').classList.add('show');
+}
+
+async function handleCreateInbox(e) {
+  e.preventDefault();
+  const name = document.getElementById('inbox-name').value.trim();
+  const fromEmail = document.getElementById('inbox-from-email').value.trim();
+  const fromName = document.getElementById('inbox-from-name').value.trim();
+  const dailyLimit = document.getElementById('inbox-daily-limit').value;
+
+  try {
+    await API.createInbox({ name, fromEmail, fromName, dailyLimit });
+    showToast('Sending inbox created!', 'success');
+    closeModal('inbox-modal');
+    document.getElementById('form-create-inbox').reset();
+    fetchInboxes();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function deleteInbox(id) {
+  if (!confirm('Remove this sending inbox?')) return;
+  try {
+    await API.deleteInbox(id);
+    showToast('Inbox removed.', 'info');
+    fetchInboxes();
+  } catch (err) { showToast(err.message, 'error'); }
 }
 
 async function updateEmailLimitInfo() {
@@ -551,6 +698,7 @@ async function fetchLeads() {
         <td><span class="badge badge-${getStatusBadge(l.status)}">${l.status}</span></td>
         <td>
           <button class="btn btn-sm btn-outline" onclick="startWorkingLead('${l._id}')" title="Open">Open</button>
+          ${l.status === 'meeting-booked' ? `<button class="btn btn-sm btn-indigo" onclick="triggerLeadCrmHandoff('${l._id}')" title="Handoff to CRM">🚀 CRM</button>` : ''}
           <button class="btn btn-sm btn-rose" onclick="deleteLead('${l._id}')" title="Delete">🗑️</button>
         </td>
       </tr>
@@ -688,20 +836,29 @@ async function fetchTeamMetrics() {
     const data = res.data;
     const sp = data.salespeople || [];
     container.innerHTML = `
-      <div class="metrics-row"><div class="metric-card"><div class="metric-data"><span>Total Leads</span><div class="metric-value">${data.overview?.totalLeads || 0}</div></div><div class="metric-icon icon-indigo">🎯</div></div>
-      <div class="metric-card"><div class="metric-data"><span>Interested</span><div class="metric-value">${data.overview?.totalInterested || 0}</div></div><div class="metric-icon icon-cyan">🔥</div></div>
-      <div class="metric-card"><div class="metric-data"><span>Booked</span><div class="metric-value">${data.overview?.totalBooked || 0}</div></div><div class="metric-icon icon-emerald">📅</div></div>
-      <div class="metric-card"><div class="metric-data"><span>Overdue</span><div class="metric-value" style="color:var(--accent-rose)">${data.overview?.totalOverdue || 0}</div></div><div class="metric-icon icon-rose">⚠️</div></div></div>
+      <div class="metrics-row">
+        <div class="metric-card"><div class="metric-data"><span>Total Leads</span><div class="metric-value">${data.overview?.totalLeads || 0}</div></div><div class="metric-icon icon-indigo">🎯</div></div>
+        <div class="metric-card"><div class="metric-data"><span>Contacted</span><div class="metric-value">${data.overview?.totalContacted || 0}</div></div><div class="metric-icon icon-cyan">📞</div></div>
+        <div class="metric-card"><div class="metric-data"><span>Booked</span><div class="metric-value">${data.overview?.totalBooked || 0}</div></div><div class="metric-icon icon-emerald">📅</div></div>
+        <div class="metric-card"><div class="metric-data"><span>Overall Booking Rate</span><div class="metric-value">${data.overview?.overallBookingRate || '0%'}</div></div><div class="metric-icon icon-rose">📈</div></div>
+        <div class="metric-card"><div class="metric-data"><span>Overdue</span><div class="metric-value" style="color:var(--accent-rose)">${data.overview?.totalOverdue || 0}</div></div><div class="metric-icon icon-rose">⚠️</div></div>
+      </div>
       ${sp.map(s => `
         <div class="contact-card-item" style="flex-direction:column;align-items:flex-start;gap:0.75rem">
-          <div style="display:flex;justify-content:space-between;width:100%"><strong>${escapeHtml(s.user.name)}</strong><span style="font-size:0.8rem;color:var(--text-muted)">${s.user.email}</span></div>
+          <div style="display:flex;justify-content:space-between;width:100%">
+            <strong>${escapeHtml(s.user.name)}</strong>
+            <span style="font-size:0.8rem;color:var(--text-muted)">${s.user.email}</span>
+          </div>
           <div style="display:flex;gap:1.5rem;font-size:0.85rem;flex-wrap:wrap">
             <span>Assigned: <strong>${s.metrics.total}</strong></span>
             <span>Contacted: <strong>${s.metrics.contacted}</strong></span>
-            <span>Interested: <strong>${s.metrics.interested}</strong></span>
             <span>Booked: <strong>${s.metrics.booked}</strong></span>
+            <span>Booking Rate: <strong>${s.metrics.bookingRate || '0%'}</strong></span>
+            <span>Calls Today: <strong>${s.stats.callsToday}</strong></span>
+            <span>Calls/Hr: <strong>${s.stats.callsPerHour || 0}</strong></span>
+            <span>Active: <strong>${formatSeconds(s.stats.activeTimeSeconds || 0)}</strong></span>
+            <span>Break: <strong>${formatSeconds(s.stats.breakTimeSeconds || 0)}</strong></span>
             <span style="color:var(--accent-rose)">Overdue: <strong>${s.metrics.callbacksOverdue}</strong></span>
-            <span>Calls today: <strong>${s.stats.callsToday}</strong></span>
           </div>
         </div>`).join('')}`;
   } catch (err) { console.error('Team error:', err); }
@@ -908,5 +1065,72 @@ function dismissAlert(category) {
     if (list) list.remove();
   } else {
     document.getElementById('alerts-text').textContent = `${remaining.length} alert(s)`;
+  }
+}
+
+/* ======================== BREAK ACTIONS ======================== */
+async function handleToggleBreak() {
+  try {
+    const res = await API.toggleBreak();
+    const { isOnBreak } = res.data;
+    const breakBtn = document.getElementById('btn-toggle-break');
+    if (breakBtn) {
+      if (isOnBreak) {
+        breakBtn.innerHTML = '▶ Resume Work';
+        breakBtn.className = 'btn btn-sm btn-emerald';
+        showToast('Break started. Active work timer paused.', 'info');
+      } else {
+        breakBtn.innerHTML = '☕ Start Break';
+        breakBtn.className = 'btn btn-sm btn-outline';
+        showToast('Work resumed!', 'success');
+      }
+    }
+    refreshDashboard();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+/* ======================== PROFILE ACTIONS ======================== */
+async function openProfileModal() {
+  try {
+    const res = await API.getMe();
+    const user = res.data;
+    document.getElementById('prof-calendar-link').value = user.calendarLink || '';
+    document.getElementById('prof-crm-webhook').value = user.crmWebhookUrl || '';
+    document.getElementById('prof-timezone').value = user.timezone || 'UTC';
+    document.getElementById('profile-modal').classList.add('show');
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function handleSaveProfile(e) {
+  e.preventDefault();
+  const calendarLink = document.getElementById('prof-calendar-link').value.trim();
+  const crmWebhookUrl = document.getElementById('prof-crm-webhook').value.trim();
+  const timezone = document.getElementById('prof-timezone').value.trim();
+
+  try {
+    await API.updateProfile({ calendarLink, crmWebhookUrl, timezone });
+    showToast('Profile settings saved!', 'success');
+    closeModal('profile-modal');
+    if (currentUser) {
+      currentUser.calendarLink = calendarLink;
+      currentUser.crmWebhookUrl = crmWebhookUrl;
+      currentUser.timezone = timezone;
+    }
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+/* ======================== CRM HANDOFF ======================== */
+async function triggerCurrentLeadCrmHandoff() {
+  if (!currentLeadId) { showToast('No lead selected.', 'error'); return; }
+  await triggerLeadCrmHandoff(currentLeadId);
+}
+
+async function triggerLeadCrmHandoff(leadId) {
+  try {
+    showToast('Dispatching CRM handoff...', 'info');
+    const res = await API.crmHandoff([leadId]);
+    showToast(res.message || 'Lead successfully handed off to CRM!', 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
   }
 }

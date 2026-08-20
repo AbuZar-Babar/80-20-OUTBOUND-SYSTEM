@@ -248,7 +248,8 @@ const workLead = async (req, res, next) => {
     const updateData = {
       status: outcome,
       lastAction: notes || `Call - ${outcome}`,
-      lastActionDate: new Date()
+      lastActionDate: new Date(),
+      hasUnansweredReply: false
     };
 
     switch (outcome) {

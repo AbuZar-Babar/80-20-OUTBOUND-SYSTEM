@@ -21,11 +21,29 @@ const heartbeat = async (req, res, next) => {
     const now = new Date();
     const lastActivity = new Date(session.lastActivityAt || session.loginAt);
     const elapsed = Math.floor((now - lastActivity) / 1000);
+
+    // If currently on break, do not add to active work time
+    const activeAddition = session.isOnBreak ? 0 : elapsed;
+
     await LoginSessionStore.updateSession(session._id, {
       lastActivityAt: now,
-      activeTimeSeconds: (session.activeTimeSeconds || 0) + elapsed
+      activeTimeSeconds: (session.activeTimeSeconds || 0) + activeAddition
     });
-    res.status(200).json({ success: true });
+    res.status(200).json({ success: true, isOnBreak: !!session.isOnBreak });
+  } catch (err) { next(err); }
+};
+
+const toggleBreak = async (req, res, next) => {
+  try {
+    const session = await LoginSessionStore.toggleBreak(req.user._id);
+    res.status(200).json({
+      success: true,
+      message: session.isOnBreak ? 'Break started.' : 'Break ended.',
+      data: {
+        isOnBreak: session.isOnBreak,
+        breakTimeSeconds: session.breakTimeSeconds
+      }
+    });
   } catch (err) { next(err); }
 };
 
@@ -53,4 +71,5 @@ const getUserSessionStats = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { recordLogin, heartbeat, updateDialingTime, getUserSessionStats };
+module.exports = { recordLogin, heartbeat, toggleBreak, updateDialingTime, getUserSessionStats };
+

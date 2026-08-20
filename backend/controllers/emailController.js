@@ -1,4 +1,4 @@
-const { LeadStore, ActivityLogStore, ActivityLogStore: ALS, SendingInboxStore } = require('../config/store');
+const { LeadStore, ActivityLogStore, SendingInboxStore } = require('../config/store');
 const { isMongoConnected } = require('../config/db');
 const ActivityLog = require('../models/ActivityLog');
 
@@ -7,19 +7,75 @@ async function checkEmailDailyLimit(userId) {
   return inbox.emailsSent || 0;
 }
 
+const getInboxes = async (req, res, next) => {
+  try {
+    const inboxes = await SendingInboxStore.findAllInboxes();
+    res.status(200).json({ success: true, count: inboxes.length, data: inboxes });
+  } catch (err) { next(err); }
+};
+
+const createInbox = async (req, res, next) => {
+  try {
+    const { name, fromEmail, fromName, dailyLimit } = req.body;
+    if (!fromEmail) {
+      return res.status(400).json({ success: false, message: 'fromEmail is required.' });
+    }
+    const inbox = await SendingInboxStore.createInbox({
+      name: name || fromEmail,
+      fromEmail,
+      fromName: fromName || '',
+      dailyLimit: parseInt(dailyLimit) || 50,
+      createdBy: req.user._id,
+      status: 'healthy',
+      active: true
+    });
+    res.status(201).json({ success: true, message: 'Sending inbox created.', data: inbox });
+  } catch (err) { next(err); }
+};
+
+const updateInbox = async (req, res, next) => {
+  try {
+    const inbox = await SendingInboxStore.updateInbox(req.params.id, req.body);
+    if (!inbox) return res.status(404).json({ success: false, message: 'Inbox not found.' });
+    res.status(200).json({ success: true, message: 'Inbox updated.', data: inbox });
+  } catch (err) { next(err); }
+};
+
+const deleteInbox = async (req, res, next) => {
+  try {
+    const deleted = await SendingInboxStore.deleteInbox(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, message: 'Inbox not found.' });
+    res.status(200).json({ success: true, message: 'Inbox deleted.' });
+  } catch (err) { next(err); }
+};
+
 const sendEmail = async (req, res, next) => {
   try {
-    const { leadId, subject, body, templateId } = req.body;
+    const { leadId, subject, body, templateId, inboxId } = req.body;
 
     if (!leadId || !subject || !body) {
       return res.status(400).json({ success: false, message: 'leadId, subject, and body are required.' });
     }
 
-    const emailsToday = await checkEmailDailyLimit(req.user._id);
-    const limit = req.user.dailyEmailLimit || 50;
-    if (emailsToday >= limit) {
-      await SendingInboxStore.setStatus(req.user._id, 'throttled');
-      return res.status(429).json({ success: false, message: `Daily email limit reached (${limit}). Try again tomorrow.` });
+    let senderEmail = process.env.EMAIL_FROM || process.env.ADMIN_EMAIL;
+    let senderName = '';
+    let selectedInbox = null;
+
+    if (inboxId) {
+      selectedInbox = await SendingInboxStore.findInboxById(inboxId);
+      if (!selectedInbox) return res.status(404).json({ success: false, message: 'Selected sending inbox not found.' });
+      if (selectedInbox.emailsSentToday >= selectedInbox.dailyLimit) {
+        return res.status(429).json({ success: false, message: `Selected inbox daily limit reached (${selectedInbox.dailyLimit}).` });
+      }
+      senderEmail = selectedInbox.fromEmail;
+      senderName = selectedInbox.fromName;
+    } else {
+      const emailsToday = await checkEmailDailyLimit(req.user._id);
+      const limit = req.user.dailyEmailLimit || 50;
+      if (emailsToday >= limit) {
+        await SendingInboxStore.setStatus(req.user._id, 'throttled');
+        return res.status(429).json({ success: false, message: `Daily email limit reached (${limit}). Try again tomorrow.` });
+      }
     }
 
     const lead = await LeadStore.findById(leadId);
@@ -39,7 +95,7 @@ const sendEmail = async (req, res, next) => {
         sgMail.setApiKey(process.env.SENDGRID_API_KEY);
         await sgMail.send({
           to: lead.contact.email,
-          from: process.env.EMAIL_FROM || process.env.ADMIN_EMAIL,
+          from: senderName ? { email: senderEmail, name: senderName } : senderEmail,
           subject,
           html: body
         });
@@ -60,6 +116,9 @@ const sendEmail = async (req, res, next) => {
       });
 
       await SendingInboxStore.incrementEmail(req.user._id);
+      if (inboxId) {
+        await SendingInboxStore.incrementInboxUsage(inboxId);
+      }
 
       await ActivityLogStore.create({
         leadId,
@@ -67,7 +126,7 @@ const sendEmail = async (req, res, next) => {
         action: 'email',
         channel: 'email',
         direction: 'outbound',
-        notes: `Subject: ${subject}`
+        notes: `Subject: ${subject} (via ${senderEmail})`
       });
 
       res.status(200).json({ success: true, message: 'Email sent.' });
@@ -81,10 +140,22 @@ const sendEmail = async (req, res, next) => {
 
 const bulkEmail = async (req, res, next) => {
   try {
-    const { leadIds, subject, body } = req.body;
+    const { leadIds, subject, body, inboxId } = req.body;
 
     if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
       return res.status(400).json({ success: false, message: 'leadIds array is required.' });
+    }
+
+    let senderEmail = process.env.EMAIL_FROM || process.env.ADMIN_EMAIL;
+    let senderName = '';
+    let selectedInbox = null;
+
+    if (inboxId) {
+      selectedInbox = await SendingInboxStore.findInboxById(inboxId);
+      if (selectedInbox) {
+        senderEmail = selectedInbox.fromEmail;
+        senderName = selectedInbox.fromName;
+      }
     }
 
     let sent = 0, failed = 0;
@@ -97,12 +168,17 @@ const bulkEmail = async (req, res, next) => {
           continue;
         }
 
+        if (selectedInbox && (selectedInbox.emailsSentToday + sent) >= selectedInbox.dailyLimit) {
+          failed++;
+          continue;
+        }
+
         if (process.env.SENDGRID_API_KEY) {
           const sgMail = require('@sendgrid/mail');
           sgMail.setApiKey(process.env.SENDGRID_API_KEY);
           await sgMail.send({
             to: lead.contact.email,
-            from: process.env.EMAIL_FROM || process.env.ADMIN_EMAIL,
+            from: senderName ? { email: senderEmail, name: senderName } : senderEmail,
             subject,
             html: body
           });
@@ -116,6 +192,9 @@ const bulkEmail = async (req, res, next) => {
         });
 
         await SendingInboxStore.incrementEmail(req.user._id);
+        if (inboxId) {
+          await SendingInboxStore.incrementInboxUsage(inboxId);
+        }
 
         await ActivityLogStore.create({
           leadId,
@@ -140,7 +219,7 @@ const bulkEmail = async (req, res, next) => {
 
 const handleEmailWebhook = async (req, res, next) => {
   try {
-    const { event, email, from, subject } = req.body;
+    const { event, email, from, subject, text } = req.body;
     const emailAddr = (email || from || '').toLowerCase();
 
     if (event === 'bounce' || event === 'unsubscribe') {
@@ -172,6 +251,10 @@ const handleEmailWebhook = async (req, res, next) => {
         const lead = leads[0];
         await LeadStore.update(lead._id, {
           coldOutreachStopped: true,
+          hasUnansweredReply: true,
+          lastReplyText: subject || text || 'Inbound email reply',
+          lastReplyChannel: 'email',
+          lastReplyAt: new Date(),
           lastAction: `Inbound reply received: ${subject || '(no subject)'}`,
           lastActionDate: new Date(),
           'emailSequence.status': 'stopped',
@@ -212,4 +295,14 @@ const getInboxHealth = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { sendEmail, bulkEmail, handleEmailWebhook, getInboxHealth };
+module.exports = {
+  getInboxes,
+  createInbox,
+  updateInbox,
+  deleteInbox,
+  sendEmail,
+  bulkEmail,
+  handleEmailWebhook,
+  getInboxHealth
+};
+

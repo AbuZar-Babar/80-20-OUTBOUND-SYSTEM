@@ -26,6 +26,18 @@ const loginSessionSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  breakTimeSeconds: {
+    type: Number,
+    default: 0
+  },
+  isOnBreak: {
+    type: Boolean,
+    default: false
+  },
+  breakStartedAt: {
+    type: Date,
+    default: null
+  },
   date: {
     type: String,
     index: true

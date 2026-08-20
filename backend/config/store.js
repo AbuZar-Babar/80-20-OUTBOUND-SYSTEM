@@ -408,19 +408,21 @@ const LeadStore = {
       const endOfDay = new Date(today);
       endOfDay.setHours(23, 59, 59, 999);
 
+      const replies = await Lead.find({ userId, hasUnansweredReply: true }).sort({ lastReplyAt: -1 }).lean();
       const overdue = await Lead.find({ userId, status: 'callback', callbackDate: { $lt: now } }).sort({ callbackDate: 1 }).lean();
       const dueToday = await Lead.find({ userId, status: 'callback', callbackDate: { $gte: today, $lte: endOfDay } }).sort({ callbackDate: 1 }).lean();
       const interested = await Lead.find({ userId, status: 'interested', coldOutreachStopped: false }).sort({ 'assignment.priority': -1 }).lean();
       const newLeads = await Lead.find({ userId, status: 'new' }).sort({ 'assignment.priority': -1 }).limit(50).lean();
 
-      return { overdue, dueToday, interested, newLeads };
+      return { replies, overdue, dueToday, interested, newLeads };
     }
-    if (!store.leads) return { overdue: [], dueToday: [], interested: [], newLeads: [] };
+    if (!store.leads) return { replies: [], overdue: [], dueToday: [], interested: [], newLeads: [] };
     const userLeads = store.leads.filter(l => l.userId === userId);
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const endOfDay = new Date(today); endOfDay.setHours(23, 59, 59, 999);
     return {
+      replies: userLeads.filter(l => l.hasUnansweredReply).sort((a, b) => new Date(b.lastReplyAt || 0) - new Date(a.lastReplyAt || 0)),
       overdue: userLeads.filter(l => l.status === 'callback' && l.callbackDate && new Date(l.callbackDate) < now),
       dueToday: userLeads.filter(l => l.status === 'callback' && l.callbackDate && new Date(l.callbackDate) >= today && new Date(l.callbackDate) <= endOfDay),
       interested: userLeads.filter(l => l.status === 'interested' && !l.coldOutreachStopped),
@@ -654,19 +656,191 @@ const LoginSessionStore = {
     saveStore();
     return store.loginSessions[idx];
   },
+  async toggleBreak(userId) {
+    const today = new Date().toISOString().slice(0, 10);
+    let session;
+    if (isMongoConnected()) {
+      session = await LoginSession.findOne({ userId, date: today });
+      if (!session) {
+        session = await LoginSession.create({ userId, date: today });
+      }
+      const now = new Date();
+      if (session.isOnBreak) {
+        const breakStart = session.breakStartedAt ? new Date(session.breakStartedAt) : now;
+        const elapsed = Math.floor((now - breakStart) / 1000);
+        session.breakTimeSeconds = (session.breakTimeSeconds || 0) + elapsed;
+        session.isOnBreak = false;
+        session.breakStartedAt = null;
+        session.lastActivityAt = now;
+      } else {
+        session.isOnBreak = true;
+        session.breakStartedAt = now;
+      }
+      await session.save();
+      return session.toObject();
+    }
+    session = await this.findToday(userId);
+    if (!session) {
+      session = await this.create({ userId, date: today, breakTimeSeconds: 0, isOnBreak: false });
+    }
+    const now = new Date();
+    if (session.isOnBreak) {
+      const breakStart = session.breakStartedAt ? new Date(session.breakStartedAt) : now;
+      const elapsed = Math.floor((now - breakStart) / 1000);
+      session.breakTimeSeconds = (session.breakTimeSeconds || 0) + elapsed;
+      session.isOnBreak = false;
+      session.breakStartedAt = null;
+      session.lastActivityAt = now.toISOString();
+    } else {
+      session.isOnBreak = true;
+      session.breakStartedAt = now.toISOString();
+    }
+    await this.updateSession(session._id, session);
+    return session;
+  },
   async getUserStats(userId) {
     const today = new Date().toISOString().slice(0, 10);
+    let session;
     if (isMongoConnected()) {
-      const session = await LoginSession.findOne({ userId, date: today }).lean();
-      return { activeTimeSeconds: session?.activeTimeSeconds || 0, dialingTimeSeconds: session?.dialingTimeSeconds || 0 };
+      session = await LoginSession.findOne({ userId, date: today }).lean();
+    } else {
+      session = await this.findToday(userId);
     }
-    const session = await this.findToday(userId);
-    return { activeTimeSeconds: session?.activeTimeSeconds || 0, dialingTimeSeconds: session?.dialingTimeSeconds || 0 };
+    let breakTime = session?.breakTimeSeconds || 0;
+    if (session?.isOnBreak && session?.breakStartedAt) {
+      breakTime += Math.floor((Date.now() - new Date(session.breakStartedAt).getTime()) / 1000);
+    }
+    return {
+      activeTimeSeconds: session?.activeTimeSeconds || 0,
+      dialingTimeSeconds: session?.dialingTimeSeconds || 0,
+      breakTimeSeconds: breakTime,
+      isOnBreak: !!session?.isOnBreak
+    };
   }
 };
 
-// --- SendingInbox Operations (per-inbox daily counters) ---
+// --- SendingInbox Operations (multi-inbox support & per-inbox daily counters) ---
 const SendingInboxStore = {
+  async createInbox(data) {
+    if (isMongoConnected()) {
+      return await SendingInbox.create(data);
+    }
+    if (!store.configuredInboxes) store.configuredInboxes = [];
+    const newInbox = {
+      _id: generateId(),
+      name: data.name || 'Default Inbox',
+      fromEmail: data.fromEmail || '',
+      fromName: data.fromName || '',
+      dailyLimit: data.dailyLimit || 50,
+      status: 'healthy',
+      active: true,
+      createdBy: data.createdBy,
+      dailyCounters: [],
+      createdAt: new Date().toISOString()
+    };
+    store.configuredInboxes.push(newInbox);
+    saveStore();
+    return newInbox;
+  },
+
+  async findAllInboxes() {
+    const today = new Date().toISOString().slice(0, 10);
+    if (isMongoConnected()) {
+      const inboxes = await SendingInbox.find({ active: { $ne: false }, name: { $exists: true, $ne: '' } }).lean();
+      return inboxes.map(inbox => {
+        const counter = (inbox.dailyCounters || []).find(c => c.date === today);
+        return {
+          ...inbox,
+          emailsSentToday: counter ? counter.emailsSent : 0
+        };
+      });
+    }
+    if (!store.configuredInboxes) store.configuredInboxes = [];
+    return store.configuredInboxes.filter(i => i.active !== false).map(inbox => {
+      const counter = (inbox.dailyCounters || []).find(c => c.date === today);
+      return {
+        ...inbox,
+        emailsSentToday: counter ? counter.emailsSent : 0
+      };
+    });
+  },
+
+  async findInboxById(id) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (isMongoConnected()) {
+      const inbox = await SendingInbox.findById(id).lean();
+      if (!inbox) return null;
+      const counter = (inbox.dailyCounters || []).find(c => c.date === today);
+      return {
+        ...inbox,
+        emailsSentToday: counter ? counter.emailsSent : 0
+      };
+    }
+    if (!store.configuredInboxes) return null;
+    const inbox = store.configuredInboxes.find(i => i._id === id);
+    if (!inbox) return null;
+    const counter = (inbox.dailyCounters || []).find(c => c.date === today);
+    return {
+      ...inbox,
+      emailsSentToday: counter ? counter.emailsSent : 0
+    };
+  },
+
+  async updateInbox(id, data) {
+    if (isMongoConnected()) {
+      return await SendingInbox.findByIdAndUpdate(id, data, { new: true }).lean();
+    }
+    if (!store.configuredInboxes) return null;
+    const idx = store.configuredInboxes.findIndex(i => i._id === id);
+    if (idx === -1) return null;
+    store.configuredInboxes[idx] = { ...store.configuredInboxes[idx], ...data };
+    saveStore();
+    return store.configuredInboxes[idx];
+  },
+
+  async deleteInbox(id) {
+    if (isMongoConnected()) {
+      await SendingInbox.findByIdAndUpdate(id, { active: false });
+      return true;
+    }
+    if (!store.configuredInboxes) return false;
+    const idx = store.configuredInboxes.findIndex(i => i._id === id);
+    if (idx === -1) return false;
+    store.configuredInboxes[idx].active = false;
+    saveStore();
+    return true;
+  },
+
+  async incrementInboxUsage(inboxId) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (isMongoConnected()) {
+      const inbox = await SendingInbox.findById(inboxId);
+      if (!inbox) return null;
+      if (!inbox.dailyCounters) inbox.dailyCounters = [];
+      const counterIdx = inbox.dailyCounters.findIndex(c => c.date === today);
+      if (counterIdx !== -1) {
+        inbox.dailyCounters[counterIdx].emailsSent += 1;
+      } else {
+        inbox.dailyCounters.push({ date: today, emailsSent: 1 });
+      }
+      await inbox.save();
+      return inbox.toObject();
+    }
+    if (!store.configuredInboxes) return null;
+    const inbox = store.configuredInboxes.find(i => i._id === inboxId);
+    if (!inbox) return null;
+    if (!inbox.dailyCounters) inbox.dailyCounters = [];
+    const counterIdx = inbox.dailyCounters.findIndex(c => c.date === today);
+    if (counterIdx !== -1) {
+      inbox.dailyCounters[counterIdx].emailsSent += 1;
+    } else {
+      inbox.dailyCounters.push({ date: today, emailsSent: 1 });
+    }
+    saveStore();
+    return inbox;
+  },
+
+  // Backwards compatibility methods
   async getToday(userId) {
     const today = new Date().toISOString().slice(0, 10);
     if (isMongoConnected()) {
