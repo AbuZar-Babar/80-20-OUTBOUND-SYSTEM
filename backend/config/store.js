@@ -90,7 +90,7 @@ const UserStore = {
         name,
         email: email.toLowerCase(),
         password,
-        role: role || 'user',
+        role: role || 'salesperson',
         approved: approved !== undefined ? approved : false
       });
       const { password: _, ...rest } = user.toObject();
@@ -104,7 +104,7 @@ const UserStore = {
       name: name.trim(),
       email: email.toLowerCase().trim(),
       password: hashedPassword,
-      role: role || 'user',
+      role: role || 'salesperson',
       approved: approved !== undefined ? approved : false,
       createdAt: new Date().toISOString()
     };
