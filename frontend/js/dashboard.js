@@ -6,6 +6,14 @@ let currentOutcome = null;
 let heartbeatInterval = null;
 let currentLeadData = null;
 
+// Live real-time seconds tickers
+let liveActiveSeconds = 0;
+let liveBreakSeconds = 0;
+let liveDialingSeconds = 0;
+let isUserOnBreak = false;
+let isUserInCall = false;
+let liveTickerInterval = null;
+
 document.addEventListener('DOMContentLoaded', async () => {
   const token = sessionStorage.getItem('token') || localStorage.getItem('token');
   if (!token) { window.location.href = 'login.html'; return; }
@@ -21,12 +29,35 @@ document.addEventListener('DOMContentLoaded', async () => {
   initTemplateActions();
   initWhatsAppActions();
   initWhatsAppTemplateActions();
+  initLiveTimers();
+
   await refreshDashboard();
-  setInterval(refreshDashboard, 30000);
+  // High-frequency real-time auto sync
+  setInterval(refreshDashboard, 10000);
 
   try { await API.recordLogin(); } catch (e) {}
   heartbeatInterval = setInterval(() => { API.heartbeat().catch(() => {}); }, 60000);
 });
+
+function initLiveTimers() {
+  if (liveTickerInterval) clearInterval(liveTickerInterval);
+  liveTickerInterval = setInterval(() => {
+    if (isUserOnBreak) {
+      liveBreakSeconds++;
+    } else {
+      liveActiveSeconds++;
+    }
+    if (isUserInCall) {
+      liveDialingSeconds++;
+    }
+    const atEl = document.getElementById('m-active-time');
+    const btEl = document.getElementById('m-break-time');
+    const dtEl = document.getElementById('m-dialing-time');
+    if (atEl) atEl.textContent = formatSeconds(liveActiveSeconds);
+    if (btEl) btEl.textContent = formatSeconds(liveBreakSeconds);
+    if (dtEl) dtEl.textContent = formatSeconds(liveDialingSeconds);
+  }, 1000);
+}
 
 async function loadUserProfile() {
   try {
@@ -43,8 +74,7 @@ async function loadUserProfile() {
   } catch (err) { console.error('Profile error:', err); }
 }
 
-function initSidebarNavigation() {
-  const navItems = document.querySelectorAll('.nav-item');
+function switchTab(section) {
   const titles = {
     overview: ['Overview', 'Sales dashboard and metrics'],
     queue: ['Daily Queue', 'Your assigned leads for today'],
@@ -59,31 +89,81 @@ function initSidebarNavigation() {
     admin: ['User Management', 'Approve and manage users']
   };
 
+  const navItems = document.querySelectorAll('.nav-item');
+  navItems.forEach(i => {
+    i.classList.toggle('active', i.getAttribute('data-section') === section);
+  });
+  document.querySelectorAll('.app-main .panel-card, .app-main .metrics-row').forEach(el => {
+    if (el.closest('.panel-card')) el.closest('.panel-card').style.display = 'none';
+  });
+  const panel = document.getElementById(`section-${section}`);
+  if (panel) panel.style.display = 'block';
+  const [t, s] = titles[section] || ['', ''];
+  const titleEl = document.getElementById('page-title');
+  const subEl = document.getElementById('page-subtitle');
+  if (titleEl) titleEl.textContent = t;
+  if (subEl) subEl.textContent = s;
+
+  if (section === 'queue') fetchQueue();
+  if (section === 'leads') fetchLeads();
+  if (section === 'campaigns') fetchCampaigns();
+  if (section === 'activity') fetchActivity();
+  if (section === 'team') fetchTeamMetrics();
+  if (section === 'admin') fetchAdminData();
+  if (section === 'whatsapp') fetchWhatsAppTemplates();
+}
+
+function switchTabWithFilter(section, statusFilter) {
+  switchTab(section);
+  if (section === 'leads' && statusFilter) {
+    const statusSelect = document.getElementById('lead-filter-status');
+    if (statusSelect) {
+      statusSelect.value = statusFilter;
+      fetchLeads(`status=${statusFilter}`);
+    }
+  }
+}
+
+async function startQueueDialing() {
+  try {
+    const res = await API.getDailyQueue();
+    const q = res.data || {};
+    const nextLead = (q.replies && q.replies[0]) ||
+                     (q.overdue && q.overdue[0]) ||
+                     (q.dueToday && q.dueToday[0]) ||
+                     (q.interested && q.interested[0]) ||
+                     (q.newLeads && q.newLeads[0]);
+
+    if (!nextLead) {
+      showToast('No leads in your queue right now. Great job!', 'info');
+      switchTab('queue');
+      return;
+    }
+
+    currentLeadId = nextLead._id;
+    currentLeadData = nextLead;
+    const phone = nextLead.contact?.phone;
+    if (phone) {
+      document.getElementById('call-phone-input').value = phone;
+    }
+    switchTab('caller');
+    showToast(`Next queue lead loaded: ${nextLead.contact?.name || 'Lead'} (${phone || 'No phone'})`, 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+function initSidebarNavigation() {
+  const navItems = document.querySelectorAll('.nav-item');
   navItems.forEach(item => {
     item.addEventListener('click', () => {
-      navItems.forEach(i => i.classList.remove('active'));
-      item.classList.add('active');
       const section = item.getAttribute('data-section');
-      document.querySelectorAll('.app-main .panel-card, .app-main .metrics-row').forEach(el => {
-        if (el.closest('.panel-card')) el.closest('.panel-card').style.display = 'none';
-      });
-      const panel = document.getElementById(`section-${section}`);
-      if (panel) panel.style.display = 'block';
-      const [t, s] = titles[section] || ['', ''];
-      document.getElementById('page-title').textContent = t;
-      document.getElementById('page-subtitle').textContent = s;
-      if (section === 'queue') fetchQueue();
-      if (section === 'leads') fetchLeads();
-      if (section === 'campaigns') fetchCampaigns();
-      if (section === 'activity') fetchActivity();
-      if (section === 'team') fetchTeamMetrics();
-      if (section === 'admin') fetchAdminData();
-      if (section === 'whatsapp') fetchWhatsAppTemplates();
+      switchTab(section);
     });
   });
 }
 
-async function refreshDashboard() {
+async function refreshDashboard(forceToast = false) {
   try {
     const res = await API.getMetrics();
     const m = res.data;
@@ -113,16 +193,21 @@ async function refreshDashboard() {
 
     const ss = await API.getSessionStats().catch(() => null);
     if (ss && ss.data) {
+      liveActiveSeconds = ss.data.activeTimeSeconds || 0;
+      liveDialingSeconds = ss.data.dialingTimeSeconds || 0;
+      liveBreakSeconds = ss.data.breakTimeSeconds || 0;
+      isUserOnBreak = !!ss.data.isOnBreak;
+
       const atEl = document.getElementById('m-active-time');
       const dtEl = document.getElementById('m-dialing-time');
       const btEl = document.getElementById('m-break-time');
-      if (atEl) atEl.textContent = formatSeconds(ss.data.activeTimeSeconds || 0);
-      if (dtEl) dtEl.textContent = formatSeconds(ss.data.dialingTimeSeconds || 0);
-      if (btEl) btEl.textContent = formatSeconds(ss.data.breakTimeSeconds || 0);
+      if (atEl) atEl.textContent = formatSeconds(liveActiveSeconds);
+      if (dtEl) dtEl.textContent = formatSeconds(liveDialingSeconds);
+      if (btEl) btEl.textContent = formatSeconds(liveBreakSeconds);
 
       const breakBtn = document.getElementById('btn-toggle-break');
       if (breakBtn) {
-        if (ss.data.isOnBreak) {
+        if (isUserOnBreak) {
           breakBtn.innerHTML = '▶ Resume Work';
           breakBtn.className = 'btn btn-sm btn-emerald';
         } else {
@@ -162,6 +247,10 @@ async function refreshDashboard() {
 
     if (document.getElementById('section-admin') && document.getElementById('section-admin').style.display !== 'none') {
       fetchAdminData().catch(() => {});
+    }
+
+    if (forceToast) {
+      showToast('Dashboard metrics updated live!', 'success');
     }
   } catch (err) { console.error('Metrics error:', err); }
 }
@@ -316,6 +405,7 @@ function updateCallStatus(text, state) {
 
 function startCallTimer() {
   stopCallTimer(); secondsElapsed = 0;
+  isUserInCall = true;
   callTimerInterval = setInterval(() => {
     secondsElapsed++;
     const m = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
@@ -325,6 +415,7 @@ function startCallTimer() {
 }
 
 function stopCallTimer() {
+  isUserInCall = false;
   if (callTimerInterval) { clearInterval(callTimerInterval); callTimerInterval = null; }
   if (secondsElapsed > 0) {
     API.updateDialingTime(secondsElapsed).catch(() => {});
@@ -737,9 +828,10 @@ function initUploadActions() {
     if (assignTo) formData.append('userId', assignTo);
     try {
       await API.uploadLeads(formData);
-      showToast('Leads imported!', 'success');
+      showToast('Leads imported successfully!', 'success');
       closeModal('upload-modal');
       fetchLeads();
+      refreshDashboard();
     } catch (err) { showToast(err.message, 'error'); }
   });
 }
@@ -758,6 +850,7 @@ function initCampaignActions() {
       showToast('Campaign created!', 'success');
       closeModal('campaign-modal');
       fetchCampaigns();
+      refreshDashboard();
     } catch (err) { showToast(err.message, 'error'); }
   });
 }
@@ -1399,6 +1492,7 @@ async function handleToggleBreak() {
   try {
     const res = await API.toggleBreak();
     const { isOnBreak } = res.data;
+    isUserOnBreak = !!isOnBreak;
     const breakBtn = document.getElementById('btn-toggle-break');
     if (breakBtn) {
       if (isOnBreak) {

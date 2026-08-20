@@ -63,25 +63,40 @@
 
       <!-- OVERVIEW -->
       <section class="panel-card" id="section-overview">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap;gap:0.75rem;border-bottom:1px solid var(--border-subtle);padding-bottom:0.85rem;">
+          <div>
+            <h3 class="panel-title" style="font-size:1.15rem;display:flex;align-items:center;gap:0.4rem;">⚡ Real-Time Outreach Station</h3>
+            <p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.2rem">Click any tile or action button below to immediately work your pipeline in real time.</p>
+          </div>
+          <div style="display:flex;gap:0.45rem;flex-wrap:wrap;">
+            <button class="btn btn-emerald btn-sm" onclick="startQueueDialing()" title="Auto-load and dial highest priority lead">🚀 Start Next Lead</button>
+            <button class="btn btn-outline btn-sm" onclick="switchTab('queue')" title="Open Daily Lead Queue">📋 Daily Queue</button>
+            <button class="btn btn-outline btn-sm" onclick="switchTab('whatsapp')" title="Open WhatsApp Station">📱 WhatsApp</button>
+            <button class="btn btn-outline btn-sm" onclick="switchTab('sms')" title="Open SMS Station">💬 SMS</button>
+            <button class="btn btn-outline btn-sm" onclick="switchTab('email')" title="Open Email Station">✉️ Email</button>
+            <button class="btn btn-outline btn-sm" onclick="refreshDashboard(true)" title="Force Instant Real-Time Refresh">🔄 Refresh</button>
+          </div>
+        </div>
+
         <div class="metrics-row">
-          <div class="metric-card"><div class="metric-data"><span>Assigned Leads</span><div class="metric-value" id="m-total">0</div></div><div class="metric-icon icon-indigo">🎯</div></div>
-          <div class="metric-card"><div class="metric-data"><span>Contacted</span><div class="metric-value" id="m-contacted">0</div></div><div class="metric-icon icon-cyan">📞</div></div>
-          <div class="metric-card"><div class="metric-data"><span>Interested</span><div class="metric-value" id="m-interested">0</div></div><div class="metric-icon icon-emerald">🔥</div></div>
-          <div class="metric-card"><div class="metric-data"><span>Booked</span><div class="metric-value" id="m-booked">0</div></div><div class="metric-icon icon-rose">📅</div></div>
+          <div class="metric-card clickable-tile" onclick="switchTab('leads')" title="Click to view all assigned leads"><div class="metric-data"><span>Assigned Leads</span><div class="metric-value" id="m-total">0</div></div><div class="metric-icon icon-indigo">🎯</div></div>
+          <div class="metric-card clickable-tile" onclick="switchTabWithFilter('leads', 'contacted')" title="Click to view contacted leads"><div class="metric-data"><span>Contacted</span><div class="metric-value" id="m-contacted">0</div></div><div class="metric-icon icon-cyan">📞</div></div>
+          <div class="metric-card clickable-tile" onclick="switchTabWithFilter('leads', 'interested')" title="Click to view interested leads"><div class="metric-data"><span>Interested</span><div class="metric-value" id="m-interested">0</div></div><div class="metric-icon icon-emerald">🔥</div></div>
+          <div class="metric-card clickable-tile" onclick="switchTabWithFilter('leads', 'meeting-booked')" title="Click to view booked meetings"><div class="metric-data"><span>Booked</span><div class="metric-value" id="m-booked">0</div></div><div class="metric-icon icon-rose">📅</div></div>
         </div>
         <div class="metrics-row">
-          <div class="metric-card"><div class="metric-data"><span>Calls Today</span><div class="metric-value" id="m-calls-today">0</div></div><div class="metric-icon icon-indigo">📞</div></div>
-          <div class="metric-card"><div class="metric-data"><span>Emails Today</span><div class="metric-value" id="m-emails-today">0</div></div><div class="metric-icon icon-cyan">✉️</div></div>
-          <div class="metric-card"><div class="metric-data"><span>SMS Today</span><div class="metric-value" id="m-sms-today">0</div></div><div class="metric-icon icon-emerald">💬</div></div>
-          <div class="metric-card"><div class="metric-data"><span>WhatsApp Today</span><div class="metric-value" id="m-wa-today">0</div></div><div class="metric-icon icon-emerald">📱</div></div>
-          <div class="metric-card"><div class="metric-data"><span>Overdue Callbacks</span><div class="metric-value" id="m-overdue" style="color: var(--accent-rose);">0</div></div><div class="metric-icon icon-rose">⚠️</div></div>
+          <div class="metric-card clickable-tile" onclick="switchTab('caller')" title="Click to open Voice Dialer"><div class="metric-data"><span>Calls Today</span><div class="metric-value" id="m-calls-today">0</div></div><div class="metric-icon icon-indigo">📞</div></div>
+          <div class="metric-card clickable-tile" onclick="switchTab('email')" title="Click to open Email Station"><div class="metric-data"><span>Emails Today</span><div class="metric-value" id="m-emails-today">0</div></div><div class="metric-icon icon-cyan">✉️</div></div>
+          <div class="metric-card clickable-tile" onclick="switchTab('sms')" title="Click to open SMS Station"><div class="metric-data"><span>SMS Today</span><div class="metric-value" id="m-sms-today">0</div></div><div class="metric-icon icon-emerald">💬</div></div>
+          <div class="metric-card clickable-tile" onclick="switchTab('whatsapp')" title="Click to open WhatsApp Station"><div class="metric-data"><span>WhatsApp Today</span><div class="metric-value" id="m-wa-today">0</div></div><div class="metric-icon icon-emerald">📱</div></div>
+          <div class="metric-card clickable-tile" onclick="switchTab('queue')" title="Click to view Overdue Callbacks"><div class="metric-data"><span>Overdue Callbacks</span><div class="metric-value" id="m-overdue" style="color: var(--accent-rose);">0</div></div><div class="metric-icon icon-rose">⚠️</div></div>
         </div>
         <div class="metrics-row">
-          <div class="metric-card"><div class="metric-data"><span>Daily Target</span><div class="metric-value" id="m-target-progress">--</div></div><div class="metric-icon icon-indigo">🎯</div></div>
+          <div class="metric-card clickable-tile" onclick="switchTab('queue')" title="Click to view daily target progress"><div class="metric-data"><span>Daily Target</span><div class="metric-value" id="m-target-progress">--</div></div><div class="metric-icon icon-indigo">🎯</div></div>
           <div class="metric-card"><div class="metric-data"><span>Calls / Hour</span><div class="metric-value" id="m-calls-per-hour">0</div></div><div class="metric-icon icon-cyan">⚡</div></div>
           <div class="metric-card"><div class="metric-data"><span>Active Time</span><div class="metric-value" id="m-active-time">00:00</div></div><div class="metric-icon icon-cyan">⏱️</div></div>
-          <div class="metric-card"><div class="metric-data"><span>Break Time</span><div class="metric-value" id="m-break-time" style="color:var(--accent-amber)">00:00</div></div><div class="metric-icon icon-amber">☕</div></div>
-          <div class="metric-card"><div class="metric-data"><span>Dialing Time</span><div class="metric-value" id="m-dialing-time">00:00</div></div><div class="metric-icon icon-emerald">📞</div></div>
+          <div class="metric-card clickable-tile" onclick="handleToggleBreak()" title="Click to toggle Break in real time"><div class="metric-data"><span>Break Time</span><div class="metric-value" id="m-break-time" style="color:var(--accent-amber)">00:00</div></div><div class="metric-icon icon-amber">☕</div></div>
+          <div class="metric-card clickable-tile" onclick="switchTab('caller')" title="Click to open Dialer"><div class="metric-data"><span>Dialing Time</span><div class="metric-value" id="m-dialing-time">00:00</div></div><div class="metric-icon icon-emerald">📞</div></div>
           <div class="metric-card"><div class="metric-data"><span>Booking Rate</span><div class="metric-value" id="m-booking-rate">0%</div></div><div class="metric-icon icon-rose">📈</div></div>
         </div>
       </section>

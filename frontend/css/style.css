@@ -1043,3 +1043,21 @@ select.input-control:focus {
   background: #64748b;
   display: inline-block;
 }
+
+/* Clickable Dashboard Overview Cards */
+.clickable-tile {
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.clickable-tile:hover {
+  transform: translateY(-3px);
+  border-color: rgba(99, 102, 241, 0.45);
+  box-shadow: 0 10px 28px -6px rgba(99, 102, 241, 0.3);
+}
+
+.clickable-tile:active {
+  transform: translateY(-1px);
+}
