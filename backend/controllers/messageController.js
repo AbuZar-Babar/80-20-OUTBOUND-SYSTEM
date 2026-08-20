@@ -30,7 +30,7 @@ const sendMessage = async (req, res, next) => {
     const smsContent = body.trim();
 
     // 3. Build status callback URL
-    const baseUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 5000}`;
+    const baseUrl = process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
     const statusCallback = `${baseUrl}/api/messages/webhook/status`;
 
     // 4. Send SMS via Twilio Service
@@ -210,7 +210,7 @@ const sendWhatsApp = async (req, res, next) => {
     }
 
     const recipientPhone = validation.formattedPhone;
-    const baseUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 5000}`;
+    const baseUrl = process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
     const statusCallback = `${baseUrl}/api/messages/webhook/status`;
 
     const result = await sendWhatsAppMessage(recipientPhone, messageBody, statusCallback);

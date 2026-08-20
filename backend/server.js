@@ -49,12 +49,18 @@ app.use('/api/session', sessionRoutes);
 app.use('/api/drip', dripSequenceRoutes);
 app.use('/api/whatsapp', whatsappTemplateRoutes);
 
-const frontendPath = path.join(__dirname, '../frontend');
+const frontendPath = process.env.VERCEL
+  ? path.join(__dirname, 'frontend')
+  : path.join(__dirname, '../frontend');
+
 app.use(express.static(frontendPath));
 
-// Dashboard route
 app.get('/dashboard', (req, res) => {
   res.sendFile(path.join(frontendPath, 'dashboard.html'));
+});
+
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(frontendPath, 'login.html'));
 });
 
 app.get('*', (req, res) => {
