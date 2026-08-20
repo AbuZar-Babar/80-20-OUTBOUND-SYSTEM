@@ -23,11 +23,11 @@ const makeCall = async (req, res, next) => {
 
     // 2. Build full webhook URLs
     const hostUrl = process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
-    const twimlUrl = `${hostUrl}/api/calls/twiml?to=${encodeURIComponent(recipientPhone)}`;
+    const speechUrl = 'https://webhooks.twilio.com/v1/Voice/Template/voice_speech_recognition';
     const statusUrl = `${hostUrl}/api/calls/status`;
 
     // 3. Trigger Twilio Voice API
-    const callResult = await makeOutboundCall(recipientPhone, twimlUrl, statusUrl);
+    const callResult = await makeOutboundCall(recipientPhone, speechUrl, statusUrl);
 
     // 4. Save record to store
     const callRecord = await CallStore.create({

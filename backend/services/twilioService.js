@@ -22,14 +22,14 @@ const getTwilioClient = () => {
 /**
  * Initiates an outbound phone call via Twilio Voice API.
  * @param {string} to Destination phone number (E.164)
- * @param {string} twimlUrl Full URL to the TwiML webhook endpoint
+ * @param {string} voiceUrl Full URL for the call voice webhook (e.g. speech recognition or TwiML)
  * @param {string} statusUrl Full URL to the call status callback endpoint
  */
-const makeOutboundCall = async (to, twimlUrl, statusUrl) => {
+const makeOutboundCall = async (to, voiceUrl, statusUrl) => {
   const { client, fromNumber } = getTwilioClient();
 
   const call = await client.calls.create({
-    url: twimlUrl,
+    url: voiceUrl,
     to: to,
     from: fromNumber,
     statusCallback: statusUrl,
