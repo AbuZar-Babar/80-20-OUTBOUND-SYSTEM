@@ -106,6 +106,11 @@ const API = {
 
   sendWhatsApp: (data) => apiRequest('/messages/whatsapp', 'POST', data),
 
+  getWhatsAppTemplates: () => apiRequest('/whatsapp/templates', 'GET'),
+  createWhatsAppTemplate: (data) => apiRequest('/whatsapp/templates', 'POST', data),
+  updateWhatsAppTemplate: (id, data) => apiRequest(`/whatsapp/templates/${id}`, 'PUT', data),
+  deleteWhatsAppTemplate: (id) => apiRequest(`/whatsapp/templates/${id}`, 'DELETE'),
+
   getSequences: () => apiRequest('/drip/sequences', 'GET'),
   createSequence: (data) => apiRequest('/drip/sequences', 'POST', data),
   updateSequence: (id, data) => apiRequest(`/drip/sequences/${id}`, 'PUT', data),

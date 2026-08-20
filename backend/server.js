@@ -20,6 +20,7 @@ const managerRoutes = require('./routes/managerRoutes');
 const campaignRoutes = require('./routes/campaignRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
 const dripSequenceRoutes = require('./routes/dripSequenceRoutes');
+const whatsappTemplateRoutes = require('./routes/whatsappTemplateRoutes');
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use('/api/manager', managerRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/session', sessionRoutes);
 app.use('/api/drip', dripSequenceRoutes);
+app.use('/api/whatsapp', whatsappTemplateRoutes);
 
 const frontendPath = path.join(__dirname, '../frontend');
 app.use(express.static(frontendPath));

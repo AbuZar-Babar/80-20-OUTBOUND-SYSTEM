@@ -1,4 +1,4 @@
-const { MessageStore, LeadStore, ActivityLogStore, SendingInboxStore } = require('../config/store');
+const { MessageStore, LeadStore, ActivityLogStore, SendingInboxStore, WhatsAppTemplateStore } = require('../config/store');
 const { validatePhoneNumber } = require('../utils/phoneValidator');
 const { sendSmsMessage, sendWhatsAppMessage } = require('../services/twilioService');
 
@@ -178,19 +178,38 @@ const handleInboundSms = async (req, res, next) => {
 // @access  Private
 const sendWhatsApp = async (req, res, next) => {
   try {
-    const { to, body, leadId } = req.body;
+    const { to, body, leadId, templateId } = req.body;
 
     const validation = validatePhoneNumber(to);
     if (!validation.isValid) {
       return res.status(400).json({ success: false, message: validation.message });
     }
 
-    if (!body || typeof body !== 'string' || body.trim() === '') {
-      return res.status(400).json({ success: false, message: 'Message body cannot be empty.' });
+    let messageBody = (body || '').trim();
+    let lead = null;
+    let templateName = '';
+
+    if (leadId) {
+      lead = await LeadStore.findById(leadId);
+      if (!lead) return res.status(404).json({ success: false, message: 'Lead not found.' });
+      if (lead.suppression?.whatsapp) {
+        return res.status(400).json({ success: false, message: 'WhatsApp is suppressed for this lead.' });
+      }
+    }
+
+    if (templateId && !messageBody) {
+      const template = await WhatsAppTemplateStore.findById(templateId);
+      if (!template) return res.status(404).json({ success: false, message: 'Template not found.' });
+      templateName = template.name;
+      const { applyMergeFields } = require('./whatsappTemplateController');
+      messageBody = lead ? applyMergeFields(template.body, lead) : template.body;
+    }
+
+    if (!messageBody) {
+      return res.status(400).json({ success: false, message: 'Message body is required (or provide templateId).' });
     }
 
     const recipientPhone = validation.formattedPhone;
-    const messageBody = body.trim();
     const baseUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 5000}`;
     const statusCallback = `${baseUrl}/api/messages/webhook/status`;
 
@@ -207,6 +226,22 @@ const sendWhatsApp = async (req, res, next) => {
       channel: 'whatsapp',
       direction: 'outbound'
     });
+
+    if (leadId) {
+      await LeadStore.update(leadId, {
+        lastAction: `WhatsApp sent${templateName ? ` (${templateName})` : ''}: ${messageBody.substring(0, 80)}`,
+        lastActionDate: new Date()
+      });
+      await ActivityLogStore.create({
+        leadId,
+        userId: req.user._id,
+        action: 'sms',
+        channel: 'whatsapp',
+        direction: 'outbound',
+        notes: templateName ? `Template: ${templateName}` : messageBody.substring(0, 200),
+        messageSid: result.messageSid
+      });
+    }
 
     res.status(201).json({ success: true, message: 'WhatsApp sent.', data: messageRecord });
   } catch (error) { next(error); }

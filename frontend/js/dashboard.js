@@ -4,6 +4,7 @@ let currentLeadId = null;
 let currentUser = null;
 let currentOutcome = null;
 let heartbeatInterval = null;
+let currentLeadData = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   const token = sessionStorage.getItem('token') || localStorage.getItem('token');
@@ -18,6 +19,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   initUploadActions();
   initCampaignActions();
   initTemplateActions();
+  initWhatsAppActions();
+  initWhatsAppTemplateActions();
   await refreshDashboard();
   setInterval(refreshDashboard, 30000);
 
@@ -47,6 +50,7 @@ function initSidebarNavigation() {
     queue: ['Daily Queue', 'Your assigned leads for today'],
     caller: ['Dialer', 'Click-to-call station'],
     sms: ['SMS Station', 'Send SMS messages'],
+    whatsapp: ['WhatsApp Station', 'Send WhatsApp messages'],
     email: ['Email Station', 'Send emails to leads'],
     leads: ['All Leads', 'Manage your leads'],
     campaigns: ['Campaigns', 'Manage campaigns'],
@@ -74,6 +78,7 @@ function initSidebarNavigation() {
       if (section === 'activity') fetchActivity();
       if (section === 'team') fetchTeamMetrics();
       if (section === 'admin') fetchPendingUsers();
+      if (section === 'whatsapp') fetchWhatsAppTemplates();
     });
   });
 }
@@ -89,6 +94,7 @@ async function refreshDashboard() {
     document.getElementById('m-calls-today').textContent = m.callsToday || 0;
     document.getElementById('m-emails-today').textContent = m.emailsToday || 0;
     document.getElementById('m-sms-today').textContent = m.smsToday || 0;
+    document.getElementById('m-wa-today').textContent = m.whatsappToday || 0;
     document.getElementById('m-overdue').textContent = m.callbacksOverdue || 0;
 
     if (currentUser && currentUser.dailyLeadTarget) {
@@ -174,6 +180,7 @@ async function startWorkingLead(leadId) {
     const res = await API.getLeadById(leadId);
     const { lead, timeline } = res.data;
     currentLeadId = lead._id;
+    currentLeadData = lead;
     document.getElementById('call-phone-input').value = lead.contact?.phone || '';
     document.getElementById('email-lead-id').value = lead._id;
     document.getElementById('email-to').value = lead.contact?.email || '';
@@ -194,12 +201,13 @@ async function startWorkingLead(leadId) {
 
     const timelineEl = document.getElementById('lead-timeline');
     if (timeline && timeline.length > 0) {
-      timelineEl.innerHTML = '<h4 style="margin-bottom:0.5rem">Timeline</h4>' + timeline.map(t =>
-        `<div class="contact-card-item" style="padding:0.5rem 0.75rem;margin-bottom:0.4rem">
-          <div style="font-size:0.8rem"><strong>${t.action}</strong> ${t.outcome ? `— ${t.outcome}` : ''} ${t.notes ? `<br>${escapeHtml(t.notes)}` : ''}</div>
+      timelineEl.innerHTML = '<h4 style="margin-bottom:0.5rem">Timeline</h4>' + timeline.map(t => {
+        const chIcon = t.channel === 'whatsapp' ? '📱' : t.channel === 'sms' ? '💬' : t.channel === 'email' ? '✉️' : t.channel === 'phone' ? '📞' : '';
+        return `<div class="contact-card-item" style="padding:0.5rem 0.75rem;margin-bottom:0.4rem">
+          <div style="font-size:0.8rem"><strong>${chIcon} ${t.action}</strong> ${t.outcome ? `— ${t.outcome}` : ''} ${t.notes ? `<br>${escapeHtml(t.notes)}` : ''}</div>
           <div style="font-size:0.7rem;color:var(--text-muted)">${new Date(t.timestamp).toLocaleString()}</div>
-        </div>`
-      ).join('');
+        </div>`;
+      }).join('');
     } else {
       timelineEl.innerHTML = '<div class="empty-placeholder">No activity yet</div>';
     }
@@ -654,15 +662,17 @@ async function fetchActivity() {
     const res = await API.getActivity(50);
     const container = document.getElementById('activity-list');
     if (!res.data || res.data.length === 0) { container.innerHTML = '<div class="empty-placeholder">No activity yet.</div>'; return; }
-    container.innerHTML = res.data.map(a => `
-      <div class="contact-card-item" style="align-items:flex-start">
+    container.innerHTML = res.data.map(a => {
+      const channelIcon = a.channel === 'whatsapp' ? '📱' : a.channel === 'sms' ? '💬' : a.channel === 'email' ? '✉️' : a.channel === 'phone' ? '📞' : '';
+      return `<div class="contact-card-item" style="align-items:flex-start">
         <div style="flex:1">
-          <div style="display:flex;justify-content:space-between"><span style="font-weight:600;font-size:0.9rem">${a.action.toUpperCase()} ${a.direction ? `(${a.direction})` : ''}</span><span style="font-size:0.7rem;color:var(--text-muted)">${new Date(a.timestamp).toLocaleString()}</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="font-weight:600;font-size:0.9rem">${channelIcon} ${a.action.toUpperCase()} ${a.direction ? `(${a.direction})` : ''}</span><span style="font-size:0.7rem;color:var(--text-muted)">${new Date(a.timestamp).toLocaleString()}</span></div>
           ${a.outcome ? `<div style="font-size:0.8rem;color:var(--accent-cyan)">Outcome: ${a.outcome}</div>` : ''}
           ${a.notes ? `<div style="font-size:0.85rem;color:var(--text-secondary);margin-top:4px">${escapeHtml(a.notes)}</div>` : ''}
           ${a.duration ? `<div style="font-size:0.75rem;color:var(--text-muted)">Duration: ${a.duration}s</div>` : ''}
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   } catch (err) { console.error('Activity error:', err); }
 }
 
@@ -724,6 +734,158 @@ async function approveUser(id) {
 async function rejectUser(id) {
   if (!confirm('Reject this user?')) return;
   try { await API.rejectUser(id); showToast('Rejected.', 'info'); fetchPendingUsers(); } catch (err) { showToast(err.message, 'error'); }
+}
+
+/* ======================== WHATSAPP ======================== */
+function initWhatsAppActions() {
+  const waForm = document.getElementById('form-send-whatsapp');
+  const waBody = document.getElementById('wa-body-input');
+  const counter = document.getElementById('wa-char-counter');
+  if (waBody && counter) waBody.addEventListener('input', () => { counter.textContent = `${waBody.value.length}/1024`; });
+  if (waForm) waForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const to = document.getElementById('wa-recipient-input').value.trim();
+    const body = waBody.value.trim();
+    const leadId = document.getElementById('wa-lead-id').value.trim() || undefined;
+    const templateId = document.getElementById('wa-template-select').value || undefined;
+    if (!to) { showToast('Enter a phone number.', 'error'); return; }
+    if (!body && !templateId) { showToast('Enter a message or select a template.', 'error'); return; }
+    try {
+      await API.sendWhatsApp({ to, body: body || undefined, leadId, templateId });
+      showToast('WhatsApp sent!', 'success');
+      waBody.value = '';
+      if (counter) counter.textContent = '0/1024';
+      refreshDashboard();
+    } catch (err) { showToast(err.message, 'error'); }
+  });
+}
+
+function showWhatsAppTab(tab) {
+  document.querySelectorAll('#section-whatsapp .tab-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('wa-compose-tab').style.display = tab === 'compose' ? 'block' : 'none';
+  document.getElementById('wa-templates-tab').style.display = tab === 'templates' ? 'block' : 'none';
+  document.getElementById('wa-history-tab').style.display = tab === 'history' ? 'block' : 'none';
+  if (tab === 'templates') fetchWhatsAppTemplates();
+  if (tab === 'history') fetchWhatsAppHistory();
+}
+
+function sendWhatsAppFromLead() {
+  if (!currentLeadData) { showToast('Open a lead first.', 'error'); return; }
+  const phone = currentLeadData.contact?.phone;
+  if (!phone) { showToast('Lead has no phone number.', 'error'); return; }
+  document.getElementById('wa-recipient-input').value = phone;
+  document.getElementById('wa-lead-id').value = currentLeadId || '';
+  closeModal('lead-detail-modal');
+  switchTab('whatsapp');
+  showToast('Lead loaded into WhatsApp station', 'info');
+}
+
+async function toggleLeadSuppression(channel) {
+  if (!currentLeadId) { showToast('No lead selected.', 'error'); return; }
+  try {
+    await API.suppressLead(currentLeadId, channel);
+    showToast(`${channel} suppression toggled`, 'success');
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+function initWhatsAppTemplateActions() {
+  const form = document.getElementById('form-create-wa-template');
+  if (form) form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await API.createWhatsAppTemplate({
+        name: document.getElementById('wa-tpl-name').value.trim(),
+        body: document.getElementById('wa-tpl-body').value.trim(),
+        category: document.getElementById('wa-tpl-category').value
+      });
+      showToast('WhatsApp template created!', 'success');
+      closeModal('wa-template-modal');
+      fetchWhatsAppTemplates();
+    } catch (err) { showToast(err.message, 'error'); }
+  });
+}
+
+async function fetchWhatsAppTemplates() {
+  try {
+    const res = await API.getWhatsAppTemplates();
+    const container = document.getElementById('wa-templates-list');
+    const select = document.getElementById('wa-template-select');
+    if (!res.data || res.data.length === 0) {
+      if (container) container.innerHTML = '<div class="empty-placeholder">No WhatsApp templates yet.</div>';
+      if (select) select.innerHTML = '<option value="">No template</option>';
+      return;
+    }
+    if (container) {
+      container.innerHTML = res.data.map(t => `
+        <div class="contact-card-item">
+          <div style="flex:1"><div style="font-weight:600">${escapeHtml(t.name)}</div>
+          <div style="font-size:0.75rem;color:var(--text-muted)">${t.category} ${t.mergeFields?.length ? '| Fields: ' + t.mergeFields.join(', ') : ''}</div></div>
+          <div style="display:flex;gap:0.4rem">
+            <button class="btn btn-sm btn-outline" onclick="useWhatsAppTemplate('${t._id}','${escapeHtml(t.body).replace(/'/g, "\\'")}')">Use</button>
+            <button class="btn btn-sm btn-rose" onclick="deleteWhatsAppTemplate('${t._id}')">🗑️</button>
+          </div>
+        </div>`).join('');
+    }
+    if (select) {
+      select.innerHTML = '<option value="">No template</option>' + res.data.map(t => `<option value="${t._id}">${escapeHtml(t.name)}</option>`).join('');
+    }
+  } catch (err) { console.error('WhatsApp templates error:', err); }
+}
+
+function applyWhatsAppTemplate() {
+  const select = document.getElementById('wa-template-select');
+  const tplId = select?.value;
+  if (!tplId) return;
+  API.getWhatsAppTemplates().then(res => {
+    const tpl = res.data.find(t => t._id === tplId);
+    if (tpl) {
+      document.getElementById('wa-body-input').value = tpl.body;
+      const counter = document.getElementById('wa-char-counter');
+      if (counter) counter.textContent = `${tpl.body.length}/1024`;
+    }
+  });
+}
+
+function useWhatsAppTemplate(id, body) {
+  document.getElementById('wa-body-input').value = body;
+  const counter = document.getElementById('wa-char-counter');
+  if (counter) counter.textContent = `${body.length}/1024`;
+  if (currentLeadId) document.getElementById('wa-lead-id').value = currentLeadId;
+  if (currentLeadData?.contact?.phone) document.getElementById('wa-recipient-input').value = currentLeadData.contact.phone;
+  showWhatsAppTab('compose');
+  document.querySelectorAll('#section-whatsapp .tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#section-whatsapp .tab-btn')[0].classList.add('active');
+}
+
+async function deleteWhatsAppTemplate(id) {
+  if (!confirm('Delete WhatsApp template?')) return;
+  try { await API.deleteWhatsAppTemplate(id); showToast('Deleted.', 'info'); fetchWhatsAppTemplates(); } catch (err) { showToast(err.message, 'error'); }
+}
+
+function showWhatsAppTemplateModal() { document.getElementById('wa-template-modal').classList.add('show'); }
+
+async function fetchWhatsAppHistory() {
+  try {
+    const res = await API.getMessages();
+    const container = document.getElementById('wa-history-list');
+    const waMessages = (res.data || []).filter(m => m.channel === 'whatsapp');
+    if (waMessages.length === 0) {
+      container.innerHTML = '<div class="empty-placeholder">No WhatsApp messages yet.</div>';
+      return;
+    }
+    container.innerHTML = waMessages.map(m => `
+      <div class="contact-card-item" style="align-items:flex-start">
+        <div style="flex:1">
+          <div style="display:flex;justify-content:space-between">
+            <span style="font-weight:600;font-size:0.85rem">${m.direction === 'inbound' ? '📥' : '📤'} ${escapeHtml(m.to || m.from)}</span>
+            <span style="font-size:0.7rem;color:var(--text-muted)">${new Date(m.createdAt).toLocaleString()}</span>
+          </div>
+          <div style="font-size:0.85rem;color:var(--text-secondary);margin-top:4px">${escapeHtml(m.body || '').substring(0, 200)}</div>
+          <div style="font-size:0.7rem;margin-top:2px"><span class="badge badge-${m.status === 'sent' || m.status === 'delivered' ? 'completed' : m.status === 'failed' ? 'failed' : 'queued'}">${m.status}</span></div>
+        </div>
+      </div>`).join('');
+  } catch (err) { console.error('WhatsApp history error:', err); }
 }
 
 /* ======================== HELPERS ======================== */

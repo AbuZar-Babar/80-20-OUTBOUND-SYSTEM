@@ -15,6 +15,7 @@ const EmailTemplate = require('../models/EmailTemplate');
 const LoginSession = require('../models/LoginSession');
 const SendingInbox = require('../models/SendingInbox');
 const EmailSequence = require('../models/EmailSequence');
+const WhatsAppTemplate = require('../models/WhatsAppTemplate');
 
 // Zero-DB local persistence
 const DATA_DIR = path.join(__dirname, '../../data');
@@ -562,22 +563,24 @@ const ActivityLogStore = {
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const calls = await ActivityLog.countDocuments({ userId, action: 'call', timestamp: { $gte: today } });
       const emails = await ActivityLog.countDocuments({ userId, action: 'email', timestamp: { $gte: today } });
-      const smss = await ActivityLog.countDocuments({ userId, action: 'sms', timestamp: { $gte: today } });
+      const smss = await ActivityLog.countDocuments({ userId, action: 'sms', channel: { $ne: 'whatsapp' }, timestamp: { $gte: today } });
+      const whatsapp = await ActivityLog.countDocuments({ userId, action: 'sms', channel: 'whatsapp', timestamp: { $gte: today } });
       const notes = await ActivityLog.countDocuments({ userId, action: 'note', timestamp: { $gte: today } });
       const totalTalkTime = await ActivityLog.aggregate([
         { $match: { userId: require('mongoose').Types.ObjectId.createFromHexString(userId), action: 'call', timestamp: { $gte: today } } },
         { $group: { _id: null, total: { $sum: '$duration' } } }
       ]);
-      return { callsToday: calls, emailsToday: emails, smsToday: smss, notesToday: notes, talkTimeToday: totalTalkTime[0]?.total || 0 };
+      return { callsToday: calls, emailsToday: emails, smsToday: smss, whatsappToday: whatsapp, notesToday: notes, talkTimeToday: totalTalkTime[0]?.total || 0 };
     }
-    if (!store.activityLogs) return { callsToday: 0, emailsToday: 0, smsToday: 0, notesToday: 0, talkTimeToday: 0 };
+    if (!store.activityLogs) return { callsToday: 0, emailsToday: 0, smsToday: 0, whatsappToday: 0, notesToday: 0, talkTimeToday: 0 };
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const userLogs = store.activityLogs.filter(l => l.userId === userId && new Date(l.timestamp) >= today);
     return {
       callsToday: userLogs.filter(l => l.action === 'call').length,
       emailsToday: userLogs.filter(l => l.action === 'email').length,
-      smsToday: userLogs.filter(l => l.action === 'sms').length,
+      smsToday: userLogs.filter(l => l.action === 'sms' && l.channel !== 'whatsapp').length,
+      whatsappToday: userLogs.filter(l => l.action === 'sms' && l.channel === 'whatsapp').length,
       notesToday: userLogs.filter(l => l.action === 'note').length,
       talkTimeToday: userLogs.filter(l => l.action === 'call').reduce((sum, l) => sum + (l.duration || 0), 0)
     };
@@ -780,4 +783,43 @@ const EmailSequenceStore = {
   }
 };
 
-module.exports = { UserStore, CallStore, MessageStore, ContactStore, LeadStore, CampaignStore, ActivityLogStore, EmailTemplateStore, LoginSessionStore, SendingInboxStore, EmailSequenceStore };
+// --- WhatsAppTemplate Operations ---
+const WhatsAppTemplateStore = {
+  async create(data) {
+    if (isMongoConnected()) return await WhatsAppTemplate.create(data);
+    if (!store.whatsappTemplates) store.whatsappTemplates = [];
+    const tpl = { _id: generateId(), ...data, createdAt: new Date().toISOString() };
+    store.whatsappTemplates.push(tpl);
+    saveStore();
+    return tpl;
+  },
+  async findAll() {
+    if (isMongoConnected()) return await WhatsAppTemplate.find({ active: true }).sort({ createdAt: -1 }).lean();
+    if (!store.whatsappTemplates) return [];
+    return store.whatsappTemplates.filter(t => t.active !== false);
+  },
+  async findById(id) {
+    if (isMongoConnected()) return await WhatsAppTemplate.findById(id).lean();
+    if (!store.whatsappTemplates) return null;
+    return store.whatsappTemplates.find(t => t._id === id) || null;
+  },
+  async update(id, data) {
+    if (isMongoConnected()) return await WhatsAppTemplate.findByIdAndUpdate(id, data, { new: true }).lean();
+    if (!store.whatsappTemplates) return null;
+    const idx = store.whatsappTemplates.findIndex(t => t._id === id);
+    if (idx === -1) return null;
+    store.whatsappTemplates[idx] = { ...store.whatsappTemplates[idx], ...data };
+    saveStore();
+    return store.whatsappTemplates[idx];
+  },
+  async delete(id) {
+    if (isMongoConnected()) { await WhatsAppTemplate.findByIdAndDelete(id); return true; }
+    if (!store.whatsappTemplates) return false;
+    const len = store.whatsappTemplates.length;
+    store.whatsappTemplates = store.whatsappTemplates.filter(t => t._id !== id);
+    if (store.whatsappTemplates.length < len) { saveStore(); return true; }
+    return false;
+  }
+};
+
+module.exports = { UserStore, CallStore, MessageStore, ContactStore, LeadStore, CampaignStore, ActivityLogStore, EmailTemplateStore, LoginSessionStore, SendingInboxStore, EmailSequenceStore, WhatsAppTemplateStore };

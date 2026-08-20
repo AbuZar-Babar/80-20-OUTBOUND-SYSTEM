@@ -24,6 +24,7 @@
           <li class="nav-item" data-section="queue"><span class="nav-item-icon">📋</span> Daily Queue</li>
           <li class="nav-item" data-section="caller"><span class="nav-item-icon">📞</span> Dialer</li>
           <li class="nav-item" data-section="sms"><span class="nav-item-icon">💬</span> SMS</li>
+          <li class="nav-item" data-section="whatsapp"><span class="nav-item-icon">📱</span> WhatsApp</li>
           <li class="nav-item" data-section="email"><span class="nav-item-icon">✉️</span> Email</li>
           <li class="nav-item" data-section="leads"><span class="nav-item-icon">🎯</span> All Leads</li>
           <li class="nav-item" data-section="campaigns"><span class="nav-item-icon">📢</span> Campaigns</li>
@@ -68,6 +69,7 @@
           <div class="metric-card"><div class="metric-data"><span>Calls Today</span><div class="metric-value" id="m-calls-today">0</div></div><div class="metric-icon icon-indigo">📞</div></div>
           <div class="metric-card"><div class="metric-data"><span>Emails Today</span><div class="metric-value" id="m-emails-today">0</div></div><div class="metric-icon icon-cyan">✉️</div></div>
           <div class="metric-card"><div class="metric-data"><span>SMS Today</span><div class="metric-value" id="m-sms-today">0</div></div><div class="metric-icon icon-emerald">💬</div></div>
+          <div class="metric-card"><div class="metric-data"><span>WhatsApp Today</span><div class="metric-value" id="m-wa-today">0</div></div><div class="metric-icon icon-emerald">📱</div></div>
           <div class="metric-card"><div class="metric-data"><span>Overdue Callbacks</span><div class="metric-value" id="m-overdue" style="color: var(--accent-rose);">0</div></div><div class="metric-icon icon-rose">⚠️</div></div>
         </div>
         <div class="metrics-row">
@@ -158,6 +160,34 @@
           <div class="form-group" style="flex:1"><div style="display:flex;justify-content:space-between"><label class="form-label">Message</label><span id="sms-char-counter" style="font-size:0.75rem;color:var(--text-muted)">0/160</span></div><textarea id="sms-body-input" class="input-control" rows="4" required style="resize:vertical;min-height:120px;margin-top:0.4rem"></textarea></div>
           <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1rem;padding:0.85rem">✉️ SEND SMS</button>
         </form>
+      </section>
+
+      <!-- WHATSAPP -->
+      <section class="panel-card" id="section-whatsapp" style="display:none">
+        <div class="panel-header"><h3 class="panel-title">📱 WhatsApp Station</h3></div>
+        <div class="tab-bar" style="margin-bottom:1rem">
+          <button class="tab-btn active" onclick="showWhatsAppTab('compose')">Compose</button>
+          <button class="tab-btn" onclick="showWhatsAppTab('templates')">Templates</button>
+          <button class="tab-btn" onclick="showWhatsAppTab('history')">History</button>
+        </div>
+        <div id="wa-compose-tab">
+          <form id="form-send-whatsapp">
+            <div class="form-group"><label class="form-label">Recipient (E.164)</label><input type="tel" id="wa-recipient-input" class="input-control" placeholder="+923001234567" required></div>
+            <div class="form-group"><label class="form-label">Lead ID (optional)</label><input type="text" id="wa-lead-id" class="input-control" placeholder="Lead ID for tracking"></div>
+            <div class="form-group"><label class="form-label">Message Template (optional)</label><select id="wa-template-select" class="input-control" onchange="applyWhatsAppTemplate()"><option value="">No template</option></select></div>
+            <div class="form-group" style="flex:1"><div style="display:flex;justify-content:space-between"><label class="form-label">Message</label><span id="wa-char-counter" style="font-size:0.75rem;color:var(--text-muted)">0/1024</span></div><textarea id="wa-body-input" class="input-control" rows="5" required style="resize:vertical;min-height:140px;margin-top:0.4rem"></textarea></div>
+            <button type="submit" class="btn btn-emerald" style="width:100%;margin-top:1rem;padding:0.85rem">📱 SEND WHATSAPP</button>
+          </form>
+        </div>
+        <div id="wa-templates-tab" style="display:none">
+          <div class="panel-header"><h3 class="panel-title" style="font-size:1rem">WhatsApp Templates</h3><button class="btn btn-primary btn-sm" onclick="showWhatsAppTemplateModal()">+ New Template</button></div>
+          <div id="wa-templates-list"><div class="empty-placeholder">Loading templates...</div></div>
+          <div style="margin-top:0.75rem;font-size:0.75rem;color:var(--text-muted)">Merge fields: {{name}}, {{first_name}}, {{company}}, {{position}}, {{city}}, {{country}}, {{phone}}, {{email}}</div>
+        </div>
+        <div id="wa-history-tab" style="display:none">
+          <div class="panel-header"><h3 class="panel-title" style="font-size:1rem">Message History</h3><button class="btn btn-outline btn-sm" onclick="fetchWhatsAppHistory()">Refresh</button></div>
+          <div id="wa-history-list"><div class="empty-placeholder">Loading history...</div></div>
+        </div>
       </section>
 
       <!-- EMAIL -->
@@ -265,9 +295,12 @@
     <div class="modal-box" style="max-width:600px">
       <div class="panel-header" style="margin-bottom:1.25rem"><h3>Lead Details</h3><button class="btn btn-outline btn-sm" onclick="closeModal('lead-detail-modal')">✕</button></div>
       <div id="lead-detail-content"></div>
-      <div style="margin-top:1rem;display:flex;gap:0.5rem">
+      <div style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap">
         <button class="btn btn-outline btn-sm" onclick="showReassignModal()">Reassign</button>
         <button class="btn btn-outline btn-sm" onclick="checkLeadContactHours()">Check Hours</button>
+        <button class="btn btn-sm btn-emerald" onclick="sendWhatsAppFromLead()">📱 WhatsApp</button>
+        <button class="btn btn-sm btn-outline" onclick="toggleLeadSuppression('sms')" title="Toggle SMS suppression">🚫 SMS</button>
+        <button class="btn btn-sm btn-outline" onclick="toggleLeadSuppression('whatsapp')" title="Toggle WhatsApp suppression">🚫 WA</button>
       </div>
       <div id="contact-hours-result" style="margin-top:0.5rem"></div>
       <div id="lead-timeline" style="margin-top:1rem;max-height:300px;overflow-y:auto"></div>
@@ -292,6 +325,19 @@
         <div class="form-group"><label class="form-label">Category</label><select id="tpl-category" class="input-control"><option value="cold-outreach">Cold Outreach</option><option value="follow-up">Follow Up</option><option value="booking">Booking</option><option value="general">General</option></select></div>
         <div class="form-group"><label class="form-label">Subject</label><input type="text" id="tpl-subject" class="input-control" placeholder="Hello {{first_name}}" required></div>
         <div class="form-group"><label class="form-label">Body (HTML, use {{field}} for merge)</label><textarea id="tpl-body" class="input-control" rows="8" required style="resize:vertical;min-height:180px"></textarea></div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1rem">Save Template</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- WhatsApp Template Modal -->
+  <div class="modal-overlay" id="wa-template-modal">
+    <div class="modal-box" style="max-width:550px">
+      <div class="panel-header" style="margin-bottom:1.25rem"><h3>Create WhatsApp Template</h3><button class="btn btn-outline btn-sm" onclick="closeModal('wa-template-modal')">✕</button></div>
+      <form id="form-create-wa-template">
+        <div class="form-group"><label class="form-label">Template Name</label><input type="text" id="wa-tpl-name" class="input-control" required></div>
+        <div class="form-group"><label class="form-label">Category</label><select id="wa-tpl-category" class="input-control"><option value="cold-outreach">Cold Outreach</option><option value="follow-up">Follow Up</option><option value="booking">Booking</option><option value="general">General</option></select></div>
+        <div class="form-group"><label class="form-label">Message Body (use {{field}} for merge)</label><textarea id="wa-tpl-body" class="input-control" rows="6" required style="resize:vertical;min-height:140px" placeholder="Hi {{first_name}}, I noticed you work at {{company}}..."></textarea></div>
         <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1rem">Save Template</button>
       </form>
     </div>
