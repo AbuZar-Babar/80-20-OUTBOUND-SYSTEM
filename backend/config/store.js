@@ -40,7 +40,35 @@ const loadStore = () => {
       if (!store.calls) store.calls = [];
       if (!store.messages) store.messages = [];
       if (!store.contacts) store.contacts = [];
-      console.log(`[Zero-DB] Loaded: ${store.users.length} users, ${store.contacts.length} contacts`);
+      if (!store.whatsappTemplates || store.whatsappTemplates.length === 0) {
+        store.whatsappTemplates = [
+          {
+            _id: 'wa-tpl-intro',
+            name: 'Quick Intro & Availability',
+            category: 'intro',
+            body: 'Hi {{first_name}}, this is {{sender_name}} regarding {{company}}. Wanted to see if you have a quick minute this week to connect? Here is my calendar if easier: {{booking_link}}',
+            mergeFields: ['first_name', 'sender_name', 'company', 'booking_link'],
+            createdAt: new Date().toISOString()
+          },
+          {
+            _id: 'wa-tpl-followup',
+            name: 'Call Follow-up & Booking Link',
+            category: 'followup',
+            body: 'Hi {{first_name}}, tried giving you a quick call earlier. Whenever you have 5 minutes, feel free to pick a time that works best for you here: {{booking_link}}',
+            mergeFields: ['first_name', 'booking_link'],
+            createdAt: new Date().toISOString()
+          },
+          {
+            _id: 'wa-tpl-confirm',
+            name: 'Meeting Confirmation',
+            category: 'booking',
+            body: 'Hi {{first_name}}, looking forward to our call! If anything changes, you can manage or reschedule the time here: {{booking_link}}. Reply STOP to opt out anytime.',
+            mergeFields: ['first_name', 'booking_link'],
+            createdAt: new Date().toISOString()
+          }
+        ];
+      }
+      console.log(`[Zero-DB] Loaded: ${store.users.length} users, ${store.contacts.length} contacts, ${store.whatsappTemplates.length} WhatsApp templates`);
     } else {
       saveStore();
     }

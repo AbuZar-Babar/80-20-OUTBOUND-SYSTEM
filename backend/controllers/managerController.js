@@ -89,17 +89,20 @@ const getAlerts = async (req, res, next) => {
       const overdueCallbacks = await Lead.find({ ...query, status: 'callback', callbackDate: { $lt: new Date() } }).countDocuments();
       const untouched = await Lead.find({ ...query, status: 'new' }).countDocuments();
 
-      if (overdueCallbacks > 0) alerts.push({ type: 'warning', category: 'overdue-callbacks', message: `${overdueCallbacks} overdue callbacks`, count: overdueCallbacks });
-      if (untouched > 0) alerts.push({ type: 'info', category: 'untouched-leads', message: `${untouched} untouched leads`, count: untouched });
+      if (overdueCallbacks > 0) alerts.push({ type: 'warning', category: 'overdue-callbacks', message: `${overdueCallbacks} overdue callback(s)`, count: overdueCallbacks });
+      if (untouched > 0) alerts.push({ type: 'info', category: 'untouched-leads', message: `${untouched} untouched lead(s)`, count: untouched });
 
-      const failedSms = await Message.find({ ...query, status: { $in: ['failed', 'undelivered'] } }).countDocuments();
+      const failedMessages = await Message.find({ ...query, channel: 'whatsapp', status: { $in: ['failed', 'undelivered'] } }).countDocuments();
+      if (failedMessages > 0) alerts.push({ type: 'error', category: 'failed-whatsapp', message: `${failedMessages} failed/undelivered WhatsApp message(s)`, count: failedMessages });
+
+      const failedSms = await Message.find({ ...query, channel: 'sms', status: { $in: ['failed', 'undelivered'] } }).countDocuments();
       if (failedSms > 0) alerts.push({ type: 'error', category: 'failed-sms', message: `${failedSms} failed/undelivered SMS`, count: failedSms });
 
-      const unansweredReplies = await ActivityLog.find({ ...query, action: 'inbound-reply', timestamp: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }).countDocuments();
-      if (unansweredReplies > 0) alerts.push({ type: 'warning', category: 'unanswered-replies', message: `${unansweredReplies} unanswered replies (24h)`, count: unansweredReplies });
+      const unansweredWaReplies = await Lead.find({ ...query, hasUnansweredReply: true, lastReplyChannel: 'whatsapp' }).countDocuments();
+      if (unansweredWaReplies > 0) alerts.push({ type: 'warning', category: 'unanswered-whatsapp', message: `${unansweredWaReplies} unanswered WhatsApp reply(ies) needing action`, count: unansweredWaReplies });
 
-      const inboundSmsReplies = await ActivityLog.find({ ...query, action: 'sms', outcome: 'inbound-reply', timestamp: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }).countDocuments();
-      if (inboundSmsReplies > 0) alerts.push({ type: 'warning', category: 'inbound-sms-followup', message: `${inboundSmsReplies} inbound SMS needing follow-up (24h)`, count: inboundSmsReplies });
+      const unansweredSmsReplies = await Lead.find({ ...query, hasUnansweredReply: true, lastReplyChannel: 'sms' }).countDocuments();
+      if (unansweredSmsReplies > 0) alerts.push({ type: 'warning', category: 'inbound-sms-followup', message: `${unansweredSmsReplies} unanswered SMS reply(ies) needing action`, count: unansweredSmsReplies });
 
       if (!userId) {
         const users = await UserStore.findAllUsers();
@@ -127,6 +130,16 @@ const getAlerts = async (req, res, next) => {
         if (metrics.contacted < target * 0.5 && new Date().getHours() >= 14) {
           alerts.push({ type: 'warning', category: 'missed-target', message: 'Below 50% of daily target', count: 1 });
         }
+      }
+    } else {
+      // Store fallback alerts
+      const queue = await LeadStore.findDailyQueue(userId || req.user._id);
+      if (queue.overdue?.length > 0) {
+        alerts.push({ type: 'warning', category: 'overdue-callbacks', message: `${queue.overdue.length} overdue callback(s)`, count: queue.overdue.length });
+      }
+      const waReplies = (queue.replies || []).filter(r => r.lastReplyChannel === 'whatsapp');
+      if (waReplies.length > 0) {
+        alerts.push({ type: 'warning', category: 'unanswered-whatsapp', message: `${waReplies.length} unanswered WhatsApp reply(ies)`, count: waReplies.length });
       }
     }
 

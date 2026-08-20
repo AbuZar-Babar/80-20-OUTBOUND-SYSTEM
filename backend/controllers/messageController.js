@@ -182,7 +182,7 @@ const handleInboundSms = async (req, res, next) => {
 // @access  Private
 const sendWhatsApp = async (req, res, next) => {
   try {
-    const { to, body, leadId, templateId } = req.body;
+    const { to, body, leadId, templateId, closerId } = req.body;
 
     const validation = validatePhoneNumber(to);
     if (!validation.isValid) {
@@ -197,16 +197,28 @@ const sendWhatsApp = async (req, res, next) => {
       lead = await LeadStore.findById(leadId);
       if (!lead) return res.status(404).json({ success: false, message: 'Lead not found.' });
       if (lead.suppression?.whatsapp) {
-        return res.status(400).json({ success: false, message: 'WhatsApp is suppressed for this lead.' });
+        return res.status(400).json({ success: false, message: 'WhatsApp is suppressed for this lead (DNC / Opt-Out).' });
       }
     }
 
-    if (templateId && !messageBody) {
+    const { UserStore } = require('../config/store');
+    const senderUser = await UserStore.findById(req.user._id);
+    let closerUser = null;
+    if (closerId) {
+      closerUser = await UserStore.findById(closerId);
+    } else if (lead?.booking?.closerId) {
+      closerUser = await UserStore.findById(lead.booking.closerId);
+    }
+
+    if (templateId) {
       const template = await WhatsAppTemplateStore.findById(templateId);
       if (!template) return res.status(404).json({ success: false, message: 'Template not found.' });
       templateName = template.name;
       const { applyMergeFields } = require('./whatsappTemplateController');
-      messageBody = lead ? applyMergeFields(template.body, lead) : template.body;
+      messageBody = applyMergeFields(messageBody || template.body, lead, senderUser, closerUser);
+    } else if (messageBody && (lead || senderUser || closerUser)) {
+      const { applyMergeFields } = require('./whatsappTemplateController');
+      messageBody = applyMergeFields(messageBody, lead, senderUser, closerUser);
     }
 
     if (!messageBody) {
@@ -242,12 +254,13 @@ const sendWhatsApp = async (req, res, next) => {
         action: 'sms',
         channel: 'whatsapp',
         direction: 'outbound',
-        notes: templateName ? `Template: ${templateName}` : messageBody.substring(0, 200),
+        outcome: 'sent',
+        notes: templateName ? `[${templateName}] ${messageBody.substring(0, 200)}` : messageBody.substring(0, 200),
         messageSid: result.messageSid
       });
     }
 
-    res.status(201).json({ success: true, message: 'WhatsApp sent.', data: messageRecord });
+    res.status(201).json({ success: true, message: 'WhatsApp sent successfully.', data: messageRecord });
   } catch (error) { next(error); }
 };
 
@@ -265,6 +278,9 @@ const handleInboundWhatsApp = async (req, res, next) => {
     const senderPhone = From.replace('whatsapp:', '');
     const messageBody = Body.trim();
 
+    const optOutKeywords = ['stop', 'unsubscribe', 'cancel', 'opt out', 'optout', 'dnc', 'quit', 'halt'];
+    const isOptOut = optOutKeywords.some(k => messageBody.toLowerCase() === k || messageBody.toLowerCase().startsWith(k + ' '));
+
     await MessageStore.create({
       userId: 'system',
       messageSid: MessageSid || `wa-inbound-${Date.now()}`,
@@ -279,24 +295,32 @@ const handleInboundWhatsApp = async (req, res, next) => {
     const leads = await LeadStore.findPendingByPhone(senderPhone);
     if (leads.length > 0) {
       const lead = leads[0];
-      await LeadStore.update(lead._id, {
+      const updateData = {
         lastAction: `Inbound WhatsApp: ${messageBody.substring(0, 100)}`,
         lastActionDate: new Date(),
-        hasUnansweredReply: true,
+        hasUnansweredReply: !isOptOut,
         lastReplyText: messageBody.substring(0, 200),
         lastReplyChannel: 'whatsapp',
         lastReplyAt: new Date(),
         'emailSequence.status': 'stopped',
         'emailSequence.stopReason': 'inbound-whatsapp'
-      });
+      };
+
+      if (isOptOut) {
+        updateData['suppression.whatsapp'] = true;
+        updateData.status = 'DNC';
+        updateData.coldOutreachStopped = true;
+      }
+
+      await LeadStore.update(lead._id, updateData);
       await ActivityLogStore.create({
         leadId: lead._id,
         userId: lead.userId || 'system',
         action: 'sms',
         channel: 'whatsapp',
         direction: 'inbound',
-        outcome: 'inbound-reply',
-        notes: messageBody.substring(0, 200),
+        outcome: isOptOut ? 'opt-out' : 'inbound-reply',
+        notes: isOptOut ? `Opt-out requested via WhatsApp: "${messageBody}" (WhatsApp channel suppressed)` : messageBody.substring(0, 200),
         messageSid: MessageSid || ''
       });
     }

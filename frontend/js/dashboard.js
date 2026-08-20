@@ -1197,12 +1197,50 @@ function showWhatsAppTab(tab) {
   if (tab === 'history') fetchWhatsAppHistory();
 }
 
+function insertWhatsAppBookingLink() {
+  const waBody = document.getElementById('wa-body-input');
+  if (!waBody) return;
+  const linkTag = (currentLeadData?.booking?.meetingLink || currentUser?.calendarLink)
+    ? (currentLeadData?.booking?.meetingLink || currentUser?.calendarLink)
+    : '{{booking_link}}';
+  waBody.value = waBody.value ? `${waBody.value.trim()}\n\nBooking Link: ${linkTag}` : `Booking Link: ${linkTag}`;
+  const counter = document.getElementById('wa-char-counter');
+  if (counter) counter.textContent = `${waBody.value.length}/1024`;
+  showToast('Booking link inserted', 'info');
+}
+
+function insertWhatsAppTag(tag) {
+  const waBody = document.getElementById('wa-body-input');
+  if (!waBody) return;
+  waBody.value = waBody.value ? `${waBody.value} ${tag}` : tag;
+  const counter = document.getElementById('wa-char-counter');
+  if (counter) counter.textContent = `${waBody.value.length}/1024`;
+}
+
 function sendWhatsAppFromLead() {
   if (!currentLeadData) { showToast('Open a lead first.', 'error'); return; }
   const phone = currentLeadData.contact?.phone;
   if (!phone) { showToast('Lead has no phone number.', 'error'); return; }
   document.getElementById('wa-recipient-input').value = phone;
   document.getElementById('wa-lead-id').value = currentLeadId || '';
+
+  // Update lead info banner in WhatsApp station
+  const banner = document.getElementById('wa-lead-banner');
+  if (banner) {
+    banner.style.display = 'block';
+    const nameEl = document.getElementById('wa-lead-name');
+    const compEl = document.getElementById('wa-lead-company');
+    const hoursEl = document.getElementById('wa-lead-hours-badge');
+    if (nameEl) nameEl.textContent = currentLeadData.contact?.name || 'Lead';
+    if (compEl) compEl.textContent = currentLeadData.company?.name ? `(${currentLeadData.company.name})` : '';
+    if (hoursEl && currentLeadId) {
+      API.checkContactHours(currentLeadId).then(res => {
+        hoursEl.textContent = res.data?.withinHours ? '✅ Within Contact Hours' : '⛔ Outside Contact Hours';
+        hoursEl.className = `badge ${res.data?.withinHours ? 'badge-completed' : 'badge-failed'}`;
+      }).catch(() => {});
+    }
+  }
+
   closeModal('lead-detail-modal');
   switchTab('whatsapp');
   showToast('Lead loaded into WhatsApp station', 'info');
@@ -1212,7 +1250,7 @@ async function toggleLeadSuppression(channel) {
   if (!currentLeadId) { showToast('No lead selected.', 'error'); return; }
   try {
     await API.suppressLead(currentLeadId, channel);
-    showToast(`${channel} suppression toggled`, 'success');
+    showToast(`${channel.toUpperCase()} suppression updated.`, 'success');
   } catch (err) { showToast(err.message, 'error'); }
 }
 
@@ -1255,7 +1293,7 @@ async function fetchWhatsAppTemplates() {
         </div>`).join('');
     }
     if (select) {
-      select.innerHTML = '<option value="">No template</option>' + res.data.map(t => `<option value="${t._id}">${escapeHtml(t.name)}</option>`).join('');
+      select.innerHTML = '<option value="">Select a template...</option>' + res.data.map(t => `<option value="${t._id}">${escapeHtml(t.name)}</option>`).join('');
     }
   } catch (err) { console.error('WhatsApp templates error:', err); }
 }
@@ -1267,17 +1305,35 @@ function applyWhatsAppTemplate() {
   API.getWhatsAppTemplates().then(res => {
     const tpl = res.data.find(t => t._id === tplId);
     if (tpl) {
-      document.getElementById('wa-body-input').value = tpl.body;
+      let body = tpl.body;
+      if (currentLeadData) {
+        body = body
+          .replace(/\{\{first_name\}\}/gi, (currentLeadData.contact?.name || '').split(' ')[0])
+          .replace(/\{\{name\}\}/gi, currentLeadData.contact?.name || '')
+          .replace(/\{\{company\}\}/gi, currentLeadData.company?.name || '')
+          .replace(/\{\{booking_link\}\}/gi, currentLeadData.booking?.meetingLink || currentUser?.calendarLink || '')
+          .replace(/\{\{sender_name\}\}/gi, currentUser?.name || '');
+      }
+      document.getElementById('wa-body-input').value = body;
       const counter = document.getElementById('wa-char-counter');
-      if (counter) counter.textContent = `${tpl.body.length}/1024`;
+      if (counter) counter.textContent = `${body.length}/1024`;
     }
   });
 }
 
 function useWhatsAppTemplate(id, body) {
-  document.getElementById('wa-body-input').value = body;
+  let processed = body;
+  if (currentLeadData) {
+    processed = processed
+      .replace(/\{\{first_name\}\}/gi, (currentLeadData.contact?.name || '').split(' ')[0])
+      .replace(/\{\{name\}\}/gi, currentLeadData.contact?.name || '')
+      .replace(/\{\{company\}\}/gi, currentLeadData.company?.name || '')
+      .replace(/\{\{booking_link\}\}/gi, currentLeadData.booking?.meetingLink || currentUser?.calendarLink || '')
+      .replace(/\{\{sender_name\}\}/gi, currentUser?.name || '');
+  }
+  document.getElementById('wa-body-input').value = processed;
   const counter = document.getElementById('wa-char-counter');
-  if (counter) counter.textContent = `${body.length}/1024`;
+  if (counter) counter.textContent = `${processed.length}/1024`;
   if (currentLeadId) document.getElementById('wa-lead-id').value = currentLeadId;
   if (currentLeadData?.contact?.phone) document.getElementById('wa-recipient-input').value = currentLeadData.contact.phone;
   showWhatsAppTab('compose');

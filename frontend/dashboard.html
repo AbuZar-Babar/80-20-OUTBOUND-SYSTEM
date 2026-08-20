@@ -179,28 +179,72 @@
 
       <!-- WHATSAPP -->
       <section class="panel-card" id="section-whatsapp" style="display:none">
-        <div class="panel-header"><h3 class="panel-title">📱 WhatsApp Station</h3></div>
+        <div class="panel-header" style="flex-wrap:wrap;gap:0.5rem">
+          <div>
+            <h3 class="panel-title">📱 WhatsApp Station</h3>
+            <p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.25rem">Direct 1-on-1 messaging, pre-approved templates, booking link insertion & reply tracking.</p>
+          </div>
+        </div>
         <div class="tab-bar" style="margin-bottom:1rem">
           <button class="tab-btn active" onclick="showWhatsAppTab('compose')">Compose</button>
           <button class="tab-btn" onclick="showWhatsAppTab('templates')">Templates</button>
-          <button class="tab-btn" onclick="showWhatsAppTab('history')">History</button>
+          <button class="tab-btn" onclick="showWhatsAppTab('history')">History & Delivery</button>
         </div>
         <div id="wa-compose-tab">
+          <!-- Loaded Lead Info Banner -->
+          <div id="wa-lead-banner" style="display:none;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:var(--radius-sm);padding:0.6rem 0.85rem;margin-bottom:1rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <strong id="wa-lead-name" style="color:var(--accent-emerald)">Loaded Lead</strong>
+                <span id="wa-lead-company" style="font-size:0.8rem;color:var(--text-muted);margin-left:0.5rem"></span>
+              </div>
+              <span id="wa-lead-hours-badge" class="badge" style="font-size:0.7rem"></span>
+            </div>
+          </div>
+
           <form id="form-send-whatsapp">
-            <div class="form-group"><label class="form-label">Recipient (E.164)</label><input type="tel" id="wa-recipient-input" class="input-control" placeholder="+923001234567" required></div>
-            <div class="form-group"><label class="form-label">Lead ID (optional)</label><input type="text" id="wa-lead-id" class="input-control" placeholder="Lead ID for tracking"></div>
-            <div class="form-group"><label class="form-label">Message Template (optional)</label><select id="wa-template-select" class="input-control" onchange="applyWhatsAppTemplate()"><option value="">No template</option></select></div>
-            <div class="form-group" style="flex:1"><div style="display:flex;justify-content:space-between"><label class="form-label">Message</label><span id="wa-char-counter" style="font-size:0.75rem;color:var(--text-muted)">0/1024</span></div><textarea id="wa-body-input" class="input-control" rows="5" required style="resize:vertical;min-height:140px;margin-top:0.4rem"></textarea></div>
-            <button type="submit" class="btn btn-emerald" style="width:100%;margin-top:1rem;padding:0.85rem">📱 SEND WHATSAPP</button>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
+              <div class="form-group"><label class="form-label">Recipient Phone (E.164)</label><input type="tel" id="wa-recipient-input" class="input-control" placeholder="+1234567890" required></div>
+              <div class="form-group"><label class="form-label">Lead ID (optional for tracking)</label><input type="text" id="wa-lead-id" class="input-control" placeholder="Lead ID"></div>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0.75rem;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem;">
+                <label class="form-label" style="margin-bottom:0">Message Template</label>
+                <div style="display:flex;gap:0.4rem">
+                  <button type="button" class="btn btn-outline btn-sm" style="font-size:0.75rem;padding:0.2rem 0.5rem" onclick="insertWhatsAppBookingLink()">📅 Insert Booking Link</button>
+                  <button type="button" class="btn btn-outline btn-sm" style="font-size:0.75rem;padding:0.2rem 0.5rem" onclick="showWhatsAppTemplateModal()">+ New</button>
+                </div>
+              </div>
+              <select id="wa-template-select" class="input-control" onchange="applyWhatsAppTemplate()"><option value="">Select a template...</option></select>
+            </div>
+
+            <!-- Quick merge tags -->
+            <div style="display:flex;gap:0.35rem;flex-wrap:wrap;margin-bottom:0.5rem;">
+              <span style="font-size:0.75rem;color:var(--text-muted);align-self:center">Insert tag:</span>
+              <button type="button" class="btn btn-outline btn-sm" style="font-size:0.7rem;padding:0.15rem 0.4rem" onclick="insertWhatsAppTag('{{first_name}}')">{{first_name}}</button>
+              <button type="button" class="btn btn-outline btn-sm" style="font-size:0.7rem;padding:0.15rem 0.4rem" onclick="insertWhatsAppTag('{{company}}')">{{company}}</button>
+              <button type="button" class="btn btn-outline btn-sm" style="font-size:0.7rem;padding:0.15rem 0.4rem" onclick="insertWhatsAppTag('{{booking_link}}')">{{booking_link}}</button>
+              <button type="button" class="btn btn-outline btn-sm" style="font-size:0.7rem;padding:0.15rem 0.4rem" onclick="insertWhatsAppTag('{{sender_name}}')">{{sender_name}}</button>
+            </div>
+
+            <div class="form-group" style="flex:1">
+              <div style="display:flex;justify-content:space-between">
+                <label class="form-label">Message Body</label>
+                <span id="wa-char-counter" style="font-size:0.75rem;color:var(--text-muted)">0/1024</span>
+              </div>
+              <textarea id="wa-body-input" class="input-control" rows="5" required style="resize:vertical;min-height:130px;margin-top:0.3rem" placeholder="Type WhatsApp message here..."></textarea>
+            </div>
+            <button type="submit" class="btn btn-emerald" style="width:100%;margin-top:1rem;padding:0.85rem;font-weight:600">📱 SEND WHATSAPP MESSAGE</button>
           </form>
         </div>
         <div id="wa-templates-tab" style="display:none">
           <div class="panel-header"><h3 class="panel-title" style="font-size:1rem">WhatsApp Templates</h3><button class="btn btn-primary btn-sm" onclick="showWhatsAppTemplateModal()">+ New Template</button></div>
           <div id="wa-templates-list"><div class="empty-placeholder">Loading templates...</div></div>
-          <div style="margin-top:0.75rem;font-size:0.75rem;color:var(--text-muted)">Merge fields: {{name}}, {{first_name}}, {{company}}, {{position}}, {{city}}, {{country}}, {{phone}}, {{email}}</div>
+          <div style="margin-top:0.75rem;font-size:0.75rem;color:var(--text-muted)">Merge fields: {{first_name}}, {{name}}, {{company}}, {{booking_link}}, {{closer_name}}, {{sender_name}}, {{position}}, {{city}}, {{phone}}</div>
         </div>
         <div id="wa-history-tab" style="display:none">
-          <div class="panel-header"><h3 class="panel-title" style="font-size:1rem">Message History</h3><button class="btn btn-outline btn-sm" onclick="fetchWhatsAppHistory()">Refresh</button></div>
+          <div class="panel-header"><h3 class="panel-title" style="font-size:1rem">Message History & Delivery Status</h3><button class="btn btn-outline btn-sm" onclick="fetchWhatsAppHistory()">Refresh</button></div>
           <div id="wa-history-list"><div class="empty-placeholder">Loading history...</div></div>
         </div>
       </section>
