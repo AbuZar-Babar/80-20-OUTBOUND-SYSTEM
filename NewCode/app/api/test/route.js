@@ -70,6 +70,7 @@ export async function GET() {
       results
     });
   } catch (err) {
+    console.error('[API Test Error]', err);
     return NextResponse.json({
       success: false,
       message: 'Integration test failed.',

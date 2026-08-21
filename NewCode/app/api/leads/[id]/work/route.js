@@ -19,7 +19,7 @@ export async function POST(req, { params }) {
       );
     }
 
-    const { id: leadId } = params;
+    const { id: leadId } = await params;
     const body = await req.json();
     const { outcome, notes, duration, callSid, callbackDate, booking } = body;
 

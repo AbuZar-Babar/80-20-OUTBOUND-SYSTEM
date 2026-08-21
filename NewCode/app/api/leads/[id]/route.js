@@ -13,7 +13,7 @@ export async function GET(req, { params }) {
       );
     }
 
-    const { id: leadId } = params;
+    const { id: leadId } = await params;
     const lead = await LeadStore.findById(leadId);
     if (!lead) {
       return NextResponse.json(
@@ -69,7 +69,7 @@ export async function PUT(req, { params }) {
       );
     }
 
-    const { id: leadId } = params;
+    const { id: leadId } = await params;
     const body = await req.json();
 
     const updatedLead = await LeadStore.update(leadId, body);

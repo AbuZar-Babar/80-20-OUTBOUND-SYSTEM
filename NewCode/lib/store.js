@@ -432,6 +432,73 @@ export const LeadStore = {
     return store.leads.filter(l => l.campaignId === campaignId);
   },
 
+  async claimNextLead(userId) {
+    if (isMongoConnected()) {
+      const now = new Date();
+      const lockExpiry = 5 * 60 * 1000;
+      const lockCutoff = new Date(now - lockExpiry);
+
+      const lead = await Lead.findOneAndUpdate(
+        {
+          $or: [{ userId: null }, { userId: { $exists: false } }],
+          status: 'new',
+          $or: [
+            { currentlyBeingWorked: { $ne: true } },
+            { currentlyBeingWorkedAt: { $lt: lockCutoff } },
+            { currentlyBeingWorkedBy: null }
+          ]
+        },
+        {
+          $set: {
+            userId: userId,
+            currentlyBeingWorked: true,
+            currentlyBeingWorkedBy: userId,
+            currentlyBeingWorkedAt: now,
+            'assignment.dateAssigned': now
+          }
+        },
+        {
+          sort: { 'assignment.priority': -1, createdAt: 1 },
+          new: true
+        }
+      ).lean();
+      return lead;
+    }
+
+    const now = new Date();
+    const lockExpiry = 5 * 60 * 1000;
+    
+    const candidates = store.leads.filter(l => {
+      const isUnassigned = !l.userId;
+      const isNew = l.status === 'new';
+      const isNotWorked = !l.currentlyBeingWorked || 
+                          !l.currentlyBeingWorkedAt || 
+                          (now - new Date(l.currentlyBeingWorkedAt)) >= lockExpiry ||
+                          !l.currentlyBeingWorkedBy;
+      return isUnassigned && isNew && isNotWorked;
+    });
+
+    if (candidates.length === 0) return null;
+
+    candidates.sort((a, b) => {
+      const pA = a.assignment?.priority || 0;
+      const pB = b.assignment?.priority || 0;
+      if (pB !== pA) return pB - pA;
+      return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+    });
+
+    const lead = candidates[0];
+    lead.userId = userId;
+    lead.currentlyBeingWorked = true;
+    lead.currentlyBeingWorkedBy = userId;
+    lead.currentlyBeingWorkedAt = now.toISOString();
+    if (!lead.assignment) lead.assignment = {};
+    lead.assignment.dateAssigned = now.toISOString();
+
+    saveStore();
+    return lead;
+  },
+
   async findDailyQueue(userId) {
     if (isMongoConnected()) {
       const now = new Date();

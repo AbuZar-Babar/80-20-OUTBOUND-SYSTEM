@@ -17,6 +17,7 @@ export default function Workstation() {
   const [selectedLead, setSelectedLead] = useState(null);
   const [leadHistory, setLeadHistory] = useState([]);
   const [fetchingLead, setFetchingLead] = useState(false);
+  const [claimingLead, setClaimingLead] = useState(false);
 
   // Softphone & Twilio State
   const [deviceReady, setDeviceReady] = useState(false);
@@ -131,7 +132,11 @@ export default function Workstation() {
   const initializeTwilioDevice = async () => {
     try {
       const res = await apiRequest('/api/calls/token');
-      if (!res.success || !res.token) return;
+      if (!res.success || !res.token) {
+        console.warn('Twilio client token not available, falling back to simulated softphone.');
+        setCallStatus('ready');
+        return;
+      }
 
       const device = new window.Twilio.Device(res.token, {
         codecPreferences: ['opus', 'pcmu'],
@@ -168,7 +173,8 @@ export default function Workstation() {
 
       deviceRef.current = device;
     } catch (e) {
-      console.error('Could not initialize Twilio device:', e.message);
+      console.warn('Could not initialize Twilio device, falling back to simulated softphone:', e.message);
+      setCallStatus('ready');
     }
   };
 
@@ -280,6 +286,29 @@ export default function Workstation() {
     }
   };
 
+  const handleClaimLead = async () => {
+    if (stats.isOnBreak) {
+      alert('Please end your break before claiming leads.');
+      return;
+    }
+    setClaimingLead(true);
+    try {
+      const res = await apiRequest('/api/leads/claim', 'POST');
+      if (res.success && res.data) {
+        // Fetch queue again so it shows up in sidebar
+        await fetchQueue();
+        // Load the lead details and acquire lock
+        await handleSelectLead(res.data);
+      } else {
+        alert(res.message || 'No unassigned leads available.');
+      }
+    } catch (e) {
+      alert(e.message || 'Failed to claim lead from pool.');
+    } finally {
+      setClaimingLead(false);
+    }
+  };
+
   // Outbound Dialing
   const startCall = async () => {
     if (!selectedLead || !selectedLead.contact?.phone) return;
@@ -287,19 +316,45 @@ export default function Workstation() {
 
     setCallStatus('ringing');
     try {
-      // Place outbound call request
-      const res = await apiRequest('/api/calls', 'POST', {
-        to: selectedLead.contact.phone,
-        leadId: selectedLead._id
-      });
+      let callSidValue = '';
       
-      if (res.success && deviceRef.current) {
-        // Start device call
-        const conn = deviceRef.current.connect({ To: selectedLead.contact.phone });
-        setActiveConnection(conn);
-        setCallSid(res.data.callSid);
+      // If we don't have a real WebRTC device, let's simulate the call
+      if (!deviceRef.current) {
+        console.log('[Softphone MOCK] Dialing:', selectedLead.contact.phone);
+        try {
+          const res = await apiRequest('/api/calls', 'POST', {
+            to: selectedLead.contact.phone,
+            leadId: selectedLead._id
+          });
+          if (res.success) {
+            callSidValue = res.data.callSid;
+          }
+        } catch (apiErr) {
+          console.warn('[Softphone MOCK] API call failed, generating local mock SID:', apiErr.message);
+          callSidValue = `mock_sid_${Date.now()}`;
+        }
+        
+        // Simulate ringing delay and then connect
+        setTimeout(() => {
+          setCallSid(callSidValue);
+          setCallStatus('active');
+          document.getElementById('outcome-panel')?.scrollIntoView({ behavior: 'smooth' });
+        }, 1000);
       } else {
-        throw new Error('Calling failed.');
+        // Place outbound call request
+        const res = await apiRequest('/api/calls', 'POST', {
+          to: selectedLead.contact.phone,
+          leadId: selectedLead._id
+        });
+        
+        if (res.success && deviceRef.current) {
+          // Start device call
+          const conn = deviceRef.current.connect({ To: selectedLead.contact.phone });
+          setActiveConnection(conn);
+          setCallSid(res.data.callSid);
+        } else {
+          throw new Error('Calling failed.');
+        }
       }
     } catch (e) {
       alert(e.message || 'Outbound call failed. Please check Allowed Calling Hours constraints.');
@@ -310,6 +365,13 @@ export default function Workstation() {
   const endCall = () => {
     if (deviceRef.current) {
       deviceRef.current.disconnectAll();
+    } else {
+      // Simulate disconnecting call
+      if (callDuration > 0) {
+        apiRequest('/api/session/dialing', 'POST', { seconds: callDuration }).then(fetchStats);
+      }
+      setCallStatus('ready');
+      setIsMuted(false);
     }
   };
 
@@ -317,6 +379,11 @@ export default function Workstation() {
     if (activeConnection) {
       const nextMute = !isMuted;
       activeConnection.mute(nextMute);
+      setIsMuted(nextMute);
+      setCallStatus(nextMute ? 'muted' : 'active');
+    } else {
+      // Mock mute toggle
+      const nextMute = !isMuted;
       setIsMuted(nextMute);
       setCallStatus(nextMute ? 'muted' : 'active');
     }
@@ -480,287 +547,339 @@ export default function Workstation() {
     router.push('/login');
   };
 
+  // Active messaging channel tab state
+  const [activeChannel, setActiveChannel] = useState('sms');
+
   return (
-    <div className="flex-1 flex flex-col bg-slate-950 font-sans min-h-screen text-slate-100">
+    <div className="flex flex-col bg-[#0a0c12] font-sans min-h-screen text-slate-100" style={{fontFamily:"'Inter',system-ui,sans-serif"}}>
       
       {/* Top Navbar */}
-      <header className="bg-slate-900/60 backdrop-blur-md border-b border-slate-800 px-6 py-4 flex items-center justify-between z-20">
+      <header className="bg-[#0d0f18]/90 backdrop-blur-md border-b border-white/5 px-6 h-14 flex items-center justify-between z-20 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-500 flex items-center justify-center shadow-md shadow-cyan-500/20">
-            <span className="font-extrabold text-white text-lg">80</span>
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+            <span className="font-black text-white text-xs tracking-tight">80</span>
           </div>
-          <div>
-            <h2 className="font-bold text-slate-100 leading-none">Workstation</h2>
-            <span className="text-[10px] text-slate-400 font-semibold tracking-widest uppercase">sales workspace</span>
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-sm text-white">Workstation</span>
+            <span className="hidden sm:block text-[10px] text-slate-500 font-medium bg-white/5 px-2 py-0.5 rounded-full uppercase tracking-wider">Sales Agent</span>
           </div>
         </div>
 
         {/* Softphone Banner */}
-        <div className="hidden md:flex items-center gap-4 bg-slate-950/80 border border-slate-800 rounded-full px-5 py-2">
-          <div className="flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full ${
-              callStatus === 'active' ? 'bg-emerald-500 animate-pulse' :
-              callStatus === 'ready' ? 'bg-cyan-500' : 'bg-red-500'
-            }`}></span>
-            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-              {callStatus === 'active' ? `In Call (${formatTime(callDuration)})` : `Softphone: ${callStatus}`}
-            </span>
-          </div>
-          
-          {callStatus === 'active' && (
-            <div className="flex items-center gap-2 border-l border-slate-800 pl-3">
-              <button 
-                onClick={toggleMute} 
-                className={`p-1.5 rounded-lg text-xs font-semibold ${isMuted ? 'bg-red-500/20 text-red-400' : 'hover:bg-slate-800 text-slate-400'}`}
-              >
-                🎙️ {isMuted ? 'Muted' : 'Mute'}
+        <div className="hidden md:flex items-center gap-3 bg-white/5 border border-white/8 rounded-xl px-4 py-2">
+          <span className={`w-2 h-2 rounded-full shrink-0 ${
+            callStatus === 'active' || callStatus === 'muted' ? 'bg-emerald-400 shadow-lg shadow-emerald-500/40 animate-pulse' :
+            callStatus === 'ready' ? 'bg-cyan-400 shadow-lg shadow-cyan-500/30' :
+            callStatus === 'ringing' ? 'bg-amber-400 animate-pulse' :
+            'bg-red-500'
+          }`} />
+          <span className="text-xs font-semibold text-slate-300">
+            {callStatus === 'active' ? `In Call â€” ${formatTime(callDuration)}` :
+             callStatus === 'muted' ? `Muted â€” ${formatTime(callDuration)}` :
+             callStatus === 'ringing' ? 'Ringing...' :
+             callStatus === 'ready' ? 'Softphone Ready' : 'Softphone Offline'}
+          </span>
+
+          {(callStatus === 'active' || callStatus === 'muted') && (
+            <div className="flex items-center gap-2 border-l border-white/10 pl-3">
+              <button onClick={toggleMute} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${isMuted ? 'bg-red-500/20 text-red-400' : 'hover:bg-white/5 text-slate-400'}`}>
+                {isMuted ? (
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
+                ) : (
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+                )}
+                {isMuted ? 'Unmute' : 'Mute'}
               </button>
-              <button 
-                onClick={endCall} 
-                className="bg-red-500 hover:bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-md shadow-red-500/20 transition-all duration-300"
-              >
-                🔴 End Call
+              <button onClick={endCall} className="flex items-center gap-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-lg shadow-md shadow-red-500/20 transition-all duration-200">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a16.003 16.003 0 0114 0" /></svg>
+                End Call
               </button>
             </div>
           )}
         </div>
 
-        {/* User profile & break controls */}
-        <div className="flex items-center gap-4">
-          <button 
+        {/* Right Controls */}
+        <div className="flex items-center gap-3">
+          <button
             onClick={handleToggleBreak}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all duration-300 ${
-              stats.isOnBreak 
-                ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-md shadow-amber-500/20' 
-                : 'border border-slate-800 hover:border-slate-700 text-slate-300'
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ${
+              stats.isOnBreak
+                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
             }`}
           >
-            ☕ {stats.isOnBreak ? 'On Break' : 'Start Break'}
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            {stats.isOnBreak ? 'On Break' : 'Break'}
           </button>
-          
-          <div className="text-right hidden sm:block">
-            <div className="text-xs font-bold">{user?.name || 'Loading...'}</div>
-            <div className="text-[10px] text-slate-400 capitalize">{user?.role}</div>
+
+          <div className="w-px h-5 bg-white/10" />
+
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-slate-700 to-slate-600 flex items-center justify-center text-[11px] font-bold text-slate-200">
+              {user?.name?.[0]?.toUpperCase() || 'A'}
+            </div>
+            <div className="hidden sm:block text-right">
+              <div className="text-xs font-semibold text-slate-200 leading-none">{user?.name || 'Agent'}</div>
+              <div className="text-[10px] text-slate-500 capitalize mt-0.5">{user?.role}</div>
+            </div>
           </div>
-          
-          <button 
+
+          <button
             onClick={handleLogout}
-            className="p-2 rounded-xl border border-slate-850 hover:bg-slate-900 text-slate-400 hover:text-slate-200 transition-all"
             title="Log Out"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-all"
           >
-            🚪
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
           </button>
         </div>
       </header>
 
       {/* Main Grid */}
-      <div className="flex-1 grid grid-cols-1 xl:grid-cols-12 gap-6 p-6 overflow-hidden">
-        
-        {/* Left Side: Stats and Lead Queue (3 columns) */}
-        <aside className="xl:col-span-3 flex flex-col gap-6">
-          
-          {/* Stats card */}
-          <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-5 shadow-xl">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">Workspace Daily Stats</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-950/50 rounded-2xl p-3 border border-slate-850">
-                <span className="text-[10px] text-slate-500 uppercase font-semibold">Active Work</span>
-                <div className="text-sm font-bold text-cyan-400 mt-1">{formatTime(stats.activeTimeSeconds)}</div>
+      <div className="flex-1 grid grid-cols-1 xl:grid-cols-12 gap-4 p-4 overflow-hidden">
+
+        {/* LEFT: Queue (3 cols) */}
+        <aside className="xl:col-span-3 flex flex-col gap-4 overflow-hidden">
+
+          {/* Stats */}
+          <div className="bg-white/[0.03] border border-white/7 rounded-2xl p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-3">Today's Stats</p>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] text-slate-500">Active</span>
+                <span className="text-sm font-bold text-cyan-400 tabular-nums">{formatTime(stats.activeTimeSeconds)}</span>
               </div>
-              <div className="bg-slate-950/50 rounded-2xl p-3 border border-slate-850">
-                <span className="text-[10px] text-slate-500 uppercase font-semibold">Dialing Time</span>
-                <div className="text-sm font-bold text-indigo-400 mt-1">{formatTime(stats.dialingTimeSeconds)}</div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] text-slate-500">Dialing</span>
+                <span className="text-sm font-bold text-indigo-400 tabular-nums">{formatTime(stats.dialingTimeSeconds)}</span>
               </div>
-              <div className="bg-slate-950/50 rounded-2xl p-3 border border-slate-850">
-                <span className="text-[10px] text-slate-500 uppercase font-semibold">Break Time</span>
-                <div className="text-sm font-bold text-amber-400 mt-1">{formatTime(stats.breakTimeSeconds)}</div>
-              </div>
-              <div className="bg-slate-950/50 rounded-2xl p-3 border border-slate-850">
-                <span className="text-[10px] text-slate-500 uppercase font-semibold">Targets Info</span>
-                <div className="text-sm font-bold text-emerald-400 mt-1">Lead limits</div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] text-slate-500">Break</span>
+                <span className="text-sm font-bold text-amber-400 tabular-nums">{formatTime(stats.breakTimeSeconds)}</span>
               </div>
             </div>
           </div>
 
-          {/* Alerts Feed */}
+          {/* Alerts */}
           {alerts.length > 0 && (
-            <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-5 shadow-xl max-h-48 overflow-y-auto">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center justify-between">
-                <span>System Warnings</span>
-                <span className="bg-red-500/10 text-red-400 text-[10px] px-2 py-0.5 rounded-full font-bold">{alerts.length}</span>
-              </h3>
-              <div className="space-y-2">
+            <div className="bg-red-500/5 border border-red-500/15 rounded-2xl p-4 max-h-36 overflow-y-auto">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-red-400">Alerts</p>
+                <span className="text-[10px] font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded-full">{alerts.length}</span>
+              </div>
+              <div className="space-y-1.5">
                 {alerts.map((al, idx) => (
-                  <div key={idx} className="flex gap-2 items-start text-xs bg-slate-950/40 p-2.5 rounded-xl border border-slate-850">
-                    <span className="mt-0.5">{al.type === 'error' ? '🔴' : al.type === 'warning' ? '⚠️' : 'ℹ️'}</span>
-                    <span className="text-slate-300 leading-normal">{al.message}</span>
+                  <div key={idx} className="flex gap-2 items-start text-xs text-slate-300">
+                    <svg className={`w-3 h-3 mt-0.5 shrink-0 ${al.type === 'error' ? 'text-red-400' : 'text-amber-400'}`} fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                    <span>{al.message}</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Dialer Queue */}
-          <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-5 flex-1 flex flex-col min-h-[350px] shadow-xl overflow-hidden">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center justify-between">
-              <span>Contact Queue</span>
-              <span className="bg-cyan-500/15 text-cyan-400 text-xs px-2 py-0.5 rounded-full font-bold">{leads.length} leads</span>
-            </h3>
+          {/* Contact Queue */}
+          <div className="bg-white/[0.03] border border-white/7 rounded-2xl p-4 flex flex-col" style={{minHeight:0, flex:'1 1 0'}}>
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/5">
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Contact Queue</p>
+                <span className="text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-full">{leads.length}</span>
+              </div>
+              <button
+                onClick={handleClaimLead}
+                disabled={claimingLead}
+                className="text-[9px] font-semibold text-cyan-400 hover:text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 rounded-md px-2 py-1 transition-all disabled:opacity-40"
+              >
+                {claimingLead ? 'Claiming...' : 'Claim Lead'}
+              </button>
+            </div>
 
             {loading ? (
               <div className="flex-1 flex items-center justify-center">
-                <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
               </div>
             ) : leads.length === 0 ? (
-              <div className="flex-1 flex flex-col justify-center items-center text-slate-500 text-center p-6 border-2 border-dashed border-slate-800/40 rounded-2xl">
-                <span className="text-2xl mb-2">🎉</span>
-                <p className="text-sm font-semibold">Outbound list cleared!</p>
-                <p className="text-[10px] text-slate-600 mt-1">Enjoy the rest of the afternoon.</p>
+              <div className="flex-1 flex flex-col items-center justify-center text-center">
+                <svg className="w-8 h-8 text-slate-700 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <p className="text-xs font-semibold text-slate-500">Queue cleared</p>
+                <p className="text-[10px] text-slate-600 mt-0.5">No more leads to contact</p>
               </div>
             ) : (
-              <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5" style={{scrollbarWidth:'thin',scrollbarColor:'#1e293b transparent'}}>
                 {leads.map((l) => (
-                  <div 
-                    key={l._id} 
+                  <button
+                    key={l._id}
                     onClick={() => handleSelectLead(l)}
-                    className={`p-3 rounded-2xl border text-left cursor-pointer transition-all duration-300 hover:translate-x-1 ${
-                      selectedLead?._id === l._id 
-                        ? 'bg-gradient-to-r from-cyan-950/60 to-indigo-950/60 border-cyan-500/50 shadow-md shadow-cyan-950/20' 
-                        : 'bg-slate-950/40 border-slate-850 hover:bg-slate-900/40'
-                    } ${l.outOfHours ? 'opacity-40 border-dashed' : ''}`}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl border transition-all duration-200 ${
+                      selectedLead?._id === l._id
+                        ? 'bg-cyan-500/10 border-cyan-500/30 shadow-sm shadow-cyan-500/10'
+                        : 'bg-transparent border-white/5 hover:bg-white/[0.04] hover:border-white/10'
+                    } ${l.outOfHours ? 'opacity-40' : ''}`}
                   >
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="font-bold text-xs truncate max-w-[130px]">{l.contact?.name}</div>
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
-                        l.status === 'callback' ? 'bg-amber-500/10 text-amber-400' :
-                        l.status === 'interested' ? 'bg-emerald-500/10 text-emerald-400' :
-                        l.status === 'new' ? 'bg-cyan-500/10 text-cyan-400' :
-                        'bg-slate-800 text-slate-400'
-                      }`}>
-                        {l.status}
-                      </span>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-200 truncate">{l.contact?.name}</span>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase shrink-0 ${
+                        l.status === 'callback' ? 'bg-amber-500/15 text-amber-400' :
+                        l.status === 'interested' ? 'bg-emerald-500/15 text-emerald-400' :
+                        'bg-white/5 text-slate-400'
+                      }`}>{l.status}</span>
                     </div>
-                    
-                    <div className="text-[10px] text-slate-400 truncate mt-1">{l.company?.name || 'No Company'}</div>
-                    
-                    <div className="flex justify-between items-center mt-2.5">
-                      <span className="text-[9px] text-slate-500">{l.geography?.city || l.geography?.timezone || 'UTC'}</span>
-                      {l.outOfHours ? (
-                        <span className="text-[9px] text-amber-500 font-bold">⛔ Out of Hours</span>
-                      ) : (
-                        <span className="text-[9px] text-slate-500 font-semibold">{l.contact?.phone}</span>
-                      )}
+                    <div className="text-[10px] text-slate-500 truncate mt-0.5">{l.company?.name}</div>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <span className="text-[9px] text-slate-600">{l.geography?.city || 'Unknown'}</span>
+                      {l.outOfHours
+                        ? <span className="text-[9px] text-amber-500 font-semibold">Out of Hours</span>
+                        : <span className="text-[9px] text-slate-600 tabular-nums">{l.contact?.phone}</span>}
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
           </div>
         </aside>
 
-        {/* Center: Selected Lead Workspace (6 columns) */}
-        <main className="xl:col-span-6 flex flex-col gap-6">
+        {/* CENTER: Lead Workspace (6 cols) */}
+        <main className="xl:col-span-6 flex flex-col gap-4 overflow-hidden">
           {fetchingLead ? (
-            <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-8 flex-1 flex flex-col items-center justify-center shadow-xl">
-              <div className="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-              <p className="text-slate-400 text-sm">Locking lead timeline profile...</p>
+            <div className="flex-1 flex flex-col items-center justify-center bg-white/[0.03] border border-white/7 rounded-2xl">
+              <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin mb-3" />
+              <p className="text-xs text-slate-500">Loading contact profile...</p>
             </div>
           ) : !selectedLead ? (
-            <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-8 flex-1 flex flex-col items-center justify-center text-center shadow-xl border-dashed">
-              <div className="w-20 h-20 rounded-full bg-slate-950/60 border border-slate-800 flex items-center justify-center mb-6 text-3xl">🎯</div>
-              <h2 className="text-xl font-bold">Sales Dialer Ready</h2>
-              <p className="text-slate-400 text-sm max-w-sm mt-2">
-                Click any lead in your priority queue on the left side to acquire its lock, load their details, and initiate outbound dials.
-              </p>
+            <div className="flex-1 flex flex-col items-center justify-center text-center bg-white/[0.03] border border-dashed border-white/8 rounded-2xl px-8">
+              <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-4">
+                <svg className="w-6 h-6 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+              </div>
+              <h2 className="text-base font-bold text-slate-300">Dialer Ready</h2>
+              <p className="text-xs text-slate-500 max-w-xs mt-1.5 leading-relaxed mb-6">Select a lead from the priority queue on the left, or pull a new lead directly from the unassigned pool to begin.</p>
+              <button
+                onClick={handleClaimLead}
+                disabled={claimingLead}
+                className="flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-bold text-xs px-5 py-3 rounded-xl shadow-lg shadow-cyan-500/25 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40"
+              >
+                {claimingLead ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Claiming Lead...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                    Claim Next Lead
+                  </>
+                )}
+              </button>
             </div>
           ) : (
-            <div className="flex-1 flex flex-col gap-6 overflow-hidden">
-              
-              {/* Profile details header */}
-              <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-cyan-500/10 to-transparent rounded-bl-full pointer-events-none"></div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <h2 className="text-2xl font-black text-white">{selectedLead.contact?.name}</h2>
-                    <p className="text-slate-400 text-sm mt-1">{selectedLead.contact?.position || 'Sales Prospect'} at <span className="text-cyan-400 font-bold">{selectedLead.company?.name || 'Company Name'}</span></p>
+            <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+
+              {/* Contact Profile Card */}
+              <div className="bg-white/[0.03] border border-white/7 rounded-2xl p-5 shrink-0">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/30 to-cyan-500/30 border border-white/10 flex items-center justify-center text-sm font-bold text-slate-200 shrink-0">
+                      {selectedLead.contact?.name?.[0]?.toUpperCase() || '?'}
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="text-base font-bold text-white leading-tight truncate">{selectedLead.contact?.name}</h2>
+                      <p className="text-xs text-slate-500 mt-0.5 truncate">
+                        {selectedLead.contact?.position && <span>{selectedLead.contact.position} Â· </span>}
+                        <span className="text-cyan-400 font-medium">{selectedLead.company?.name}</span>
+                      </p>
+                    </div>
                   </div>
-                  
-                  {/* Phone trigger dial button */}
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 shrink-0">
                     {selectedLead.outOfHours && (
-                      <span className="text-xs text-amber-500 font-bold bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-500/20">
-                        ⚠️ Outside Hours limit
+                      <span className="text-[10px] text-amber-400 font-semibold bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded-lg flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                        Out of Hours
                       </span>
                     )}
                     <button
                       onClick={startCall}
                       disabled={callStatus !== 'ready' || selectedLead.outOfHours}
-                      className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-6 py-3 rounded-2xl shadow-lg shadow-cyan-500/20 transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transform hover:-translate-y-0.5 active:translate-y-0"
+                      className="flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold text-xs px-4 py-2.5 rounded-xl shadow-lg shadow-cyan-500/20 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0"
                     >
-                      ☎️ Call Browser Phone
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                      {callStatus === 'ringing' ? 'Ringing...' : 'Dial Contact'}
                     </button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-800/40">
-                  <div>
-                    <span className="text-[10px] text-slate-500 uppercase font-semibold">Phone</span>
-                    <div className="text-xs font-bold mt-0.5 truncate">{selectedLead.contact?.phone || 'None'}</div>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-500 uppercase font-semibold">Email</span>
-                    <div className="text-xs font-bold mt-0.5 truncate">{selectedLead.contact?.email || 'None'}</div>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-500 uppercase font-semibold">Timezone / Location</span>
-                    <div className="text-xs font-bold mt-0.5 truncate">{selectedLead.geography?.city || 'City'}, {selectedLead.geography?.timezone || 'UTC'}</div>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-500 uppercase font-semibold">Lead Priority</span>
-                    <div className="text-xs font-bold mt-0.5 text-cyan-400">Rank #{selectedLead.assignment?.priority || 0}</div>
-                  </div>
+                {/* Contact Details Row */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-white/5">
+                  {[
+                    { label: 'Phone', value: selectedLead.contact?.phone },
+                    { label: 'Email', value: selectedLead.contact?.email },
+                    { label: 'Location', value: `${selectedLead.geography?.city || 'â€”'}, ${selectedLead.geography?.country || ''}` },
+                    { label: 'Priority', value: `#${selectedLead.assignment?.priority || 0}`, accent: true }
+                  ].map(({ label, value, accent }) => (
+                    <div key={label}>
+                      <span className="text-[10px] text-slate-600 uppercase font-semibold tracking-wider">{label}</span>
+                      <div className={`text-xs font-semibold mt-0.5 truncate ${accent ? 'text-cyan-400' : 'text-slate-300'}`}>{value || 'â€”'}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              {/* Messaging Communications Tabs */}
-              <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-6 shadow-xl flex-1 flex flex-col overflow-hidden">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">Send Drip / Outreach Messages</h3>
-                {messageError && (
-                  <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs font-medium">
-                    ⚠️ {messageError}
-                  </div>
-                )}
+              {/* Messaging Tabs */}
+              <div className="bg-white/[0.03] border border-white/7 rounded-2xl flex flex-col shrink-0">
+                {/* Tab Headers */}
+                <div className="flex items-center gap-0.5 p-1 border-b border-white/5 bg-white/[0.02] rounded-t-2xl">
+                  {[
+                    { id: 'sms', label: 'SMS', icon: <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg> },
+                    { id: 'whatsapp', label: 'WhatsApp', icon: <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" /></svg> },
+                    { id: 'email', label: 'Email', icon: <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg> }
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveChannel(tab.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 ${
+                        activeChannel === tab.id
+                          ? 'bg-white/8 text-slate-200 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-300 hover:bg-white/4'
+                      }`}
+                    >
+                      {tab.icon}
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
 
-                {/* Tabs */}
-                <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 overflow-y-auto custom-scrollbar">
-                  
-                  {/* SMS Panel */}
-                  <div className="bg-slate-950/40 border border-slate-850 rounded-2xl p-4 flex flex-col justify-between">
-                    <div>
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-850 pb-2 mb-3">💬 Send SMS Text</h4>
+                {/* Tab Content */}
+                <div className="p-4">
+                  {messageError && (
+                    <div className="mb-3 flex items-start gap-2 p-2.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs">
+                      <svg className="w-3.5 h-3.5 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
+                      {messageError}
+                    </div>
+                  )}
+
+                  {activeChannel === 'sms' && (
+                    <form onSubmit={sendSms} className="flex flex-col gap-3">
                       <textarea
-                        rows={5}
+                        rows={3}
                         value={smsText}
                         onChange={(e) => setSmsText(e.target.value)}
-                        placeholder="Write standard SMS message..."
-                        className="w-full text-xs bg-slate-900/80 border border-slate-800 focus:border-cyan-500/30 rounded-xl p-3 text-slate-100 placeholder-slate-600 focus:outline-none transition-all resize-none"
+                        placeholder="Write your SMS message..."
+                        className="w-full text-xs bg-[#0a0c12] border border-white/8 focus:border-cyan-500/40 rounded-xl p-3 text-slate-200 placeholder-slate-600 focus:outline-none transition-all resize-none"
                       />
-                    </div>
-                    <button
-                      onClick={sendSms}
-                      disabled={sendingMessage || !smsText.trim()}
-                      className="w-full py-2.5 mt-3 bg-slate-900 hover:bg-slate-800 text-cyan-400 hover:text-cyan-300 text-xs font-bold rounded-xl border border-cyan-500/20 shadow-md shadow-cyan-950/10 transition-all duration-300 disabled:opacity-40"
-                    >
-                      {sendingMessage ? 'Sending...' : 'Send SMS'}
-                    </button>
-                  </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-slate-600">{smsText.length}/160 chars</span>
+                        <button
+                          type="submit"
+                          disabled={sendingMessage || !smsText.trim()}
+                          className="flex items-center gap-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/25 text-cyan-400 text-xs font-semibold px-4 py-2 rounded-xl disabled:opacity-40 transition-all duration-200"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                          {sendingMessage ? 'Sending...' : 'Send SMS'}
+                        </button>
+                      </div>
+                    </form>
+                  )}
 
-                  {/* WhatsApp Template Panel */}
-                  <div className="bg-slate-950/40 border border-slate-850 rounded-2xl p-4 flex flex-col justify-between">
-                    <div className="space-y-3">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-850 pb-2 mb-1">🟢 WhatsApp Templates</h4>
-                      <div>
-                        <label className="text-[10px] text-slate-500 font-semibold mb-1 block">Choose Preset Template</label>
+                  {activeChannel === 'whatsapp' && (
+                    <form onSubmit={sendWhatsApp} className="flex flex-col gap-3">
+                      {whatsappTemplates.length > 0 && (
                         <select
                           value={selectedWaTemplate}
                           onChange={(e) => {
@@ -768,231 +887,224 @@ export default function Workstation() {
                             const t = whatsappTemplates.find(tpl => tpl._id === e.target.value);
                             setWhatsappText(t ? t.body : '');
                           }}
-                          className="w-full text-xs bg-slate-900/80 border border-slate-800 rounded-xl p-2 text-slate-100 focus:outline-none cursor-pointer"
+                          className="w-full text-xs bg-[#0a0c12] border border-white/8 rounded-xl px-3 py-2 text-slate-200 focus:outline-none cursor-pointer"
                         >
-                          <option value="">Custom WhatsApp Text</option>
+                          <option value="">â€” Custom message â€”</option>
                           {whatsappTemplates.map(tpl => (
                             <option key={tpl._id} value={tpl._id}>{tpl.name}</option>
                           ))}
                         </select>
-                      </div>
+                      )}
                       <textarea
                         rows={3}
                         value={whatsappText}
                         onChange={(e) => setWhatsappText(e.target.value)}
-                        placeholder="Customize WhatsApp details..."
-                        className="w-full text-xs bg-slate-900/80 border border-slate-800 focus:border-cyan-500/30 rounded-xl p-3 text-slate-100 placeholder-slate-600 focus:outline-none transition-all resize-none"
+                        placeholder="Write your WhatsApp message..."
+                        className="w-full text-xs bg-[#0a0c12] border border-white/8 focus:border-emerald-500/40 rounded-xl p-3 text-slate-200 placeholder-slate-600 focus:outline-none transition-all resize-none"
                       />
-                    </div>
-                    <button
-                      onClick={sendWhatsApp}
-                      disabled={sendingMessage || (!whatsappText.trim() && !selectedWaTemplate)}
-                      className="w-full py-2.5 mt-3 bg-slate-900 hover:bg-slate-800 text-emerald-400 hover:text-emerald-300 text-xs font-bold rounded-xl border border-emerald-500/20 shadow-md shadow-emerald-950/10 transition-all duration-300 disabled:opacity-40"
-                    >
-                      {sendingMessage ? 'Sending...' : 'Send WhatsApp'}
-                    </button>
-                  </div>
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={sendingMessage || (!whatsappText.trim() && !selectedWaTemplate)}
+                          className="flex items-center gap-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-400 text-xs font-semibold px-4 py-2 rounded-xl disabled:opacity-40 transition-all duration-200"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                          {sendingMessage ? 'Sending...' : 'Send WhatsApp'}
+                        </button>
+                      </div>
+                    </form>
+                  )}
 
-                  {/* SendGrid Email identity Panel */}
-                  <div className="bg-slate-950/40 border border-slate-850 rounded-2xl p-4 flex flex-col justify-between">
-                    <div className="space-y-2">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-850 pb-2 mb-1">✉️ Send Email</h4>
-                      <div>
+                  {activeChannel === 'email' && (
+                    <form onSubmit={sendOutboundEmail} className="flex flex-col gap-3">
+                      {inboxes.length > 0 && (
                         <select
                           value={selectedInboxId}
                           onChange={(e) => setSelectedInboxId(e.target.value)}
-                          className="w-full text-[10px] bg-slate-900/80 border border-slate-800 rounded-lg p-1.5 text-slate-100 focus:outline-none cursor-pointer"
+                          className="w-full text-[10px] bg-[#0a0c12] border border-white/8 rounded-xl px-3 py-2 text-slate-400 focus:outline-none cursor-pointer"
                         >
                           {inboxes.map(ib => (
-                            <option key={ib._id} value={ib._id}>{ib.fromName} ({ib.fromEmail})</option>
+                            <option key={ib._id} value={ib._id}>From: {ib.fromName} &lt;{ib.fromEmail}&gt;</option>
                           ))}
                         </select>
-                      </div>
+                      )}
                       <input
                         type="text"
                         value={emailSubject}
                         onChange={(e) => setEmailSubject(e.target.value)}
-                        placeholder="Subject..."
-                        className="w-full text-xs bg-slate-900/80 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 placeholder-slate-600 focus:outline-none"
+                        placeholder="Subject"
+                        className="w-full text-xs bg-[#0a0c12] border border-white/8 focus:border-indigo-500/40 rounded-xl px-3 py-2 text-slate-200 placeholder-slate-600 focus:outline-none"
                       />
                       <textarea
-                        rows={2}
+                        rows={4}
                         value={emailBody}
                         onChange={(e) => setEmailBody(e.target.value)}
-                        placeholder="Write email HTML or text..."
-                        className="w-full text-xs bg-slate-900/80 border border-slate-800 focus:border-cyan-500/30 rounded-xl p-3 text-slate-100 placeholder-slate-600 focus:outline-none transition-all resize-none"
+                        placeholder="Email body (HTML or plain text)..."
+                        className="w-full text-xs bg-[#0a0c12] border border-white/8 focus:border-indigo-500/40 rounded-xl p-3 text-slate-200 placeholder-slate-600 focus:outline-none transition-all resize-none"
                       />
-                    </div>
-                    <button
-                      onClick={sendOutboundEmail}
-                      disabled={sendingMessage || !emailSubject.trim() || !emailBody.trim()}
-                      className="w-full py-2.5 mt-3 bg-slate-900 hover:bg-slate-800 text-indigo-400 hover:text-indigo-300 text-xs font-bold rounded-xl border border-indigo-500/20 shadow-md shadow-indigo-950/10 transition-all duration-300 disabled:opacity-40"
-                    >
-                      {sendingMessage ? 'Sending...' : 'Send Email'}
-                    </button>
-                  </div>
-
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={sendingMessage || !emailSubject.trim() || !emailBody.trim()}
+                          className="flex items-center gap-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/25 text-indigo-400 text-xs font-semibold px-4 py-2 rounded-xl disabled:opacity-40 transition-all duration-200"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                          {sendingMessage ? 'Sending...' : 'Send Email'}
+                        </button>
+                      </div>
+                    </form>
+                  )}
                 </div>
               </div>
 
-              {/* Timeline list logs */}
-              <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-6 shadow-xl max-h-56 overflow-y-auto">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Timeline logs ({leadHistory.length})</h3>
-                {leadHistory.length === 0 ? (
-                  <div className="text-xs text-slate-500 py-3">No activity logs recorded. First dial now.</div>
-                ) : (
-                  <div className="space-y-3">
-                    {leadHistory.map((h, i) => (
-                      <div key={i} className="flex items-start gap-3 bg-slate-950/40 border border-slate-850/60 p-3 rounded-2xl text-xs">
-                        <span className="text-sm">
-                          {h.action === 'call' ? '☎️' : h.action === 'email' ? '✉️' : h.action === 'sms' ? '💬' : '📝'}
-                        </span>
-                        <div className="flex-1">
-                          <div className="flex justify-between items-center">
-                            <span className="font-bold text-slate-300 capitalize">{h.action} Outcome: {h.outcome || 'note'}</span>
-                            <span className="text-[10px] text-slate-500">{new Date(h.timestamp).toLocaleString()}</span>
+              {/* Activity Timeline */}
+              <div className="bg-white/[0.03] border border-white/7 rounded-2xl flex flex-col overflow-hidden" style={{maxHeight:'220px'}}>
+                <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/5 shrink-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Activity Timeline</p>
+                  <span className="text-[10px] text-slate-600">{leadHistory.length} entries</span>
+                </div>
+                <div className="overflow-y-auto flex-1 px-3 py-2 space-y-1" style={{scrollbarWidth:'thin',scrollbarColor:'#1e293b transparent'}}>
+                  {leadHistory.length === 0 ? (
+                    <p className="text-xs text-slate-600 py-4 text-center">No activity recorded yet</p>
+                  ) : (
+                    leadHistory.map((h, i) => (
+                      <div key={i} className="flex items-start gap-2.5 py-2 border-b border-white/4 last:border-0">
+                        <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5 ${
+                          h.action === 'call' ? 'bg-cyan-500/15 text-cyan-400' :
+                          h.action === 'email' ? 'bg-indigo-500/15 text-indigo-400' :
+                          h.action === 'sms' ? 'bg-emerald-500/15 text-emerald-400' :
+                          'bg-slate-700 text-slate-400'
+                        }`}>
+                          {h.action === 'call' && <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>}
+                          {h.action === 'email' && <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>}
+                          {h.action === 'sms' && <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>}
+                          {!['call','email','sms'].includes(h.action) && <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-semibold text-slate-300 capitalize">{h.action} â€” {h.outcome || 'note'}</span>
+                            <span className="text-[10px] text-slate-600 shrink-0 tabular-nums">{new Date(h.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
                           </div>
-                          {h.notes && <p className="text-slate-400 mt-1 italic">"{h.notes}"</p>}
+                          {h.notes && <p className="text-[10px] text-slate-500 mt-0.5 truncate">{h.notes}</p>}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    ))
+                  )}
+                </div>
               </div>
 
             </div>
           )}
         </main>
 
-        {/* Right Side: Call Outcomes Panel (3 columns) */}
-        <aside className="xl:col-span-3">
-          <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-6 shadow-xl h-full flex flex-col justify-between">
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800 pb-3 mb-5">Log Call Outcome</h3>
-              
-              {!selectedLead ? (
-                <p className="text-xs text-slate-500 text-center py-12">No active lead locked. Select a lead first.</p>
-              ) : (
-                <form onSubmit={handleSubmitOutcome} className="space-y-5">
-                  {outcomeError && (
-                    <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs font-medium">
-                      ⚠️ {outcomeError}
-                    </div>
-                  )}
+        {/* RIGHT: Outcome Panel (3 cols) */}
+        <aside className="xl:col-span-3" id="outcome-panel">
+          <div className="bg-white/[0.03] border border-white/7 rounded-2xl p-5 h-full flex flex-col">
+            <div className="flex items-center gap-2 mb-5 pb-3 border-b border-white/5">
+              <div className="w-5 h-5 rounded-md bg-cyan-500/15 flex items-center justify-center">
+                <svg className="w-3 h-3 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+              </div>
+              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Log Outcome</h3>
+            </div>
 
-                  <div>
-                    <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Outcome Status</label>
-                    <select
-                      value={outcome}
-                      onChange={(e) => setOutcome(e.target.value)}
-                      className="w-full text-xs bg-slate-950/80 border border-slate-850 focus:border-cyan-500/50 rounded-2xl px-4 py-3 text-slate-100 focus:outline-none"
-                    >
-                      <option value="new">Select Outcome...</option>
-                      <option value="no-answer">🔇 No Answer (auto retry)</option>
-                      <option value="busy">📴 Busy (auto retry)</option>
-                      <option value="voicemail">📟 Voicemail (auto retry)</option>
-                      <option value="callback">📅 Schedule Callback</option>
-                      <option value="interested">🙋 Interested</option>
-                      <option value="meeting-booked">🤝 Meeting Booked</option>
-                      <option value="not-interested">🙅 Not Interested</option>
-                      <option value="wrong-number">❌ Wrong Number</option>
-                      <option value="dnc">⛔ Do Not Call (DNC)</option>
-                    </select>
+            {!selectedLead ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center">
+                <svg className="w-8 h-8 text-slate-700 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                <p className="text-xs text-slate-600">No active lead selected</p>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmitOutcome} className="flex flex-col gap-4 flex-1">
+                {outcomeError && (
+                  <div className="flex items-start gap-2 p-2.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs">
+                    <svg className="w-3.5 h-3.5 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
+                    {outcomeError}
                   </div>
+                )}
 
-                  {/* Scheduled Callback Input */}
-                  {outcome === 'callback' && (
-                    <div>
-                      <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Callback Date & Time</label>
-                      <input
-                        type="datetime-local"
-                        required
-                        value={callbackDate}
-                        onChange={(e) => setCallbackDate(e.target.value)}
-                        className="w-full text-xs bg-slate-950/80 border border-slate-850 focus:border-cyan-500/50 rounded-2xl px-4 py-3 text-slate-100 focus:outline-none"
-                      />
-                    </div>
-                  )}
+                <div>
+                  <label className="block text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1.5">Call Outcome</label>
+                  <select
+                    value={outcome}
+                    onChange={(e) => setOutcome(e.target.value)}
+                    className="w-full text-xs bg-[#0a0c12] border border-white/8 focus:border-cyan-500/40 rounded-xl px-3 py-2.5 text-slate-200 focus:outline-none cursor-pointer"
+                  >
+                    <option value="new">Select outcome...</option>
+                    <option value="no-answer">No Answer â€” Auto Retry</option>
+                    <option value="busy">Busy â€” Auto Retry</option>
+                    <option value="voicemail">Voicemail â€” Auto Retry</option>
+                    <option value="callback">Schedule Callback</option>
+                    <option value="interested">Interested</option>
+                    <option value="meeting-booked">Meeting Booked</option>
+                    <option value="not-interested">Not Interested</option>
+                    <option value="wrong-number">Wrong Number</option>
+                    <option value="dnc">Do Not Call (DNC)</option>
+                  </select>
+                </div>
 
-                  {/* Meeting Booked Inputs */}
-                  {outcome === 'meeting-booked' && (
-                    <div className="space-y-4 bg-slate-950/40 p-4 border border-slate-850 rounded-2xl">
-                      <h4 className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider">Handoff Details</h4>
-                      
-                      <div>
-                        <label className="block text-[9px] text-slate-400 font-semibold mb-1">Closer</label>
-                        <select
-                          value={bookingCloser}
-                          onChange={(e) => setBookingCloser(e.target.value)}
-                          className="w-full text-xs bg-slate-900 border border-slate-800 rounded-xl p-2 text-slate-100"
-                        >
-                          <option value="">Select Closer...</option>
-                          {closersList.map(c => (
-                            <option key={c._id} value={c.name}>{c.name}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[9px] text-slate-400 font-semibold mb-1">Meeting Date & Time</label>
-                        <input
-                          type="datetime-local"
-                          required
-                          value={bookingDate}
-                          onChange={(e) => setBookingDate(e.target.value)}
-                          className="w-full text-xs bg-slate-900 border border-slate-800 rounded-xl p-2 text-slate-100 focus:outline-none"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[9px] text-slate-400 font-semibold mb-1">Meeting Timezone</label>
-                        <select
-                          value={bookingTimezone}
-                          onChange={(e) => setBookingTimezone(e.target.value)}
-                          className="w-full text-xs bg-slate-900 border border-slate-800 rounded-xl p-2 text-slate-100 focus:outline-none"
-                        >
-                          <option value="UTC">UTC</option>
-                          <option value="America/New_York">EST / New York</option>
-                          <option value="America/Chicago">CST / Chicago</option>
-                          <option value="America/Denver">MST / Denver</option>
-                          <option value="America/Los_Angeles">PST / Los Angeles</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[9px] text-slate-400 font-semibold mb-1">Calendar / Meeting Link</label>
-                        <input
-                          type="url"
-                          value={bookingLink}
-                          onChange={(e) => setBookingLink(e.target.value)}
-                          placeholder="https://zoom.us/j/..."
-                          className="w-full text-xs bg-slate-900 border border-slate-800 rounded-xl p-2 text-slate-100 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-                  )}
-
+                {outcome === 'callback' && (
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Outcome Notes / Call summary</label>
-                    <textarea
-                      rows={6}
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Add summary details of call outcome here..."
-                      className="w-full text-xs bg-slate-950/80 border border-slate-850 focus:border-cyan-500/50 rounded-2xl px-4 py-3 text-slate-100 placeholder-slate-600 focus:outline-none resize-none"
+                    <label className="block text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1.5">Callback Date &amp; Time</label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={callbackDate}
+                      onChange={(e) => setCallbackDate(e.target.value)}
+                      className="w-full text-xs bg-[#0a0c12] border border-white/8 focus:border-cyan-500/40 rounded-xl px-3 py-2.5 text-slate-200 focus:outline-none"
                     />
                   </div>
+                )}
 
-                  <button
-                    type="submit"
-                    disabled={submittingOutcome || outcome === 'new'}
-                    className="w-full py-4 px-4 bg-gradient-to-r from-cyan-500 to-indigo-500 hover:from-cyan-400 hover:to-indigo-400 text-white font-semibold rounded-2xl shadow-lg shadow-cyan-500/20 focus:outline-none transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {submittingOutcome ? 'Saving Log...' : 'Release & Save Lead'}
-                  </button>
-                </form>
-              )}
-            </div>
+                {outcome === 'meeting-booked' && (
+                  <div className="space-y-3 bg-cyan-500/5 border border-cyan-500/15 rounded-xl p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">Meeting Details</p>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1">Closer</label>
+                      <select value={bookingCloser} onChange={(e) => setBookingCloser(e.target.value)} className="w-full text-xs bg-[#0a0c12] border border-white/8 rounded-xl px-3 py-2 text-slate-200 focus:outline-none">
+                        <option value="">Select closer...</option>
+                        {closersList.map(c => <option key={c._id} value={c.name}>{c.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1">Meeting Date &amp; Time</label>
+                      <input type="datetime-local" required value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} className="w-full text-xs bg-[#0a0c12] border border-white/8 rounded-xl px-3 py-2 text-slate-200 focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1">Timezone</label>
+                      <select value={bookingTimezone} onChange={(e) => setBookingTimezone(e.target.value)} className="w-full text-xs bg-[#0a0c12] border border-white/8 rounded-xl px-3 py-2 text-slate-200 focus:outline-none">
+                        <option value="UTC">UTC</option>
+                        <option value="America/New_York">EST â€” New York</option>
+                        <option value="America/Chicago">CST â€” Chicago</option>
+                        <option value="America/Denver">MST â€” Denver</option>
+                        <option value="America/Los_Angeles">PST â€” Los Angeles</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1">Meeting Link</label>
+                      <input type="url" value={bookingLink} onChange={(e) => setBookingLink(e.target.value)} placeholder="https://zoom.us/j/..." className="w-full text-xs bg-[#0a0c12] border border-white/8 rounded-xl px-3 py-2 text-slate-200 placeholder-slate-600 focus:outline-none" />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex-1">
+                  <label className="block text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1.5">Notes</label>
+                  <textarea
+                    rows={6}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Summarise the call outcome..."
+                    className="w-full h-full min-h-[100px] text-xs bg-[#0a0c12] border border-white/8 focus:border-cyan-500/40 rounded-xl px-3 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none resize-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submittingOutcome || outcome === 'new'}
+                  className="w-full py-3 bg-gradient-to-r from-cyan-500 to-indigo-500 hover:from-cyan-400 hover:to-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-500/15 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0"
+                >
+                  {submittingOutcome ? 'Saving...' : 'Save & Release Lead'}
+                </button>
+              </form>
+            )}
           </div>
         </aside>
 

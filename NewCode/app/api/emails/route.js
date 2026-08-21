@@ -25,7 +25,7 @@ export async function POST(req) {
     }
 
     // Resolve sender identity
-    let senderEmail = process.env.SYSTEM_FROM_EMAIL || 'outbound@8020dialer.com';
+    let senderEmail = process.env.SYSTEM_FROM_EMAIL || 'onboarding@resend.dev';
     let senderName = '80/20 Outbound';
     
     if (inboxId) {
