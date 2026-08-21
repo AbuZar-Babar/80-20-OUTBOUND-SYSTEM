@@ -5,32 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="80/20 Essential Dialer - Outbound Sales System">
   <title>80/20 Essential Dialer</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=5">
 </head>
 <body>
 
+  <!-- Mobile Sidebar Backdrop Overlay -->
+  <div id="sidebar-backdrop" class="sidebar-backdrop" onclick="toggleMobileSidebar(false)"></div>
+
   <div class="app-layout">
-    <aside class="app-sidebar">
+    <aside class="app-sidebar" id="app-sidebar">
       <div class="brand-header">
         <div class="brand-logo">80</div>
         <div class="brand-info">
           <h1>80/20 Dialer</h1>
           <span>Essential V1</span>
         </div>
+        <button class="mobile-sidebar-close btn btn-outline btn-sm" onclick="toggleMobileSidebar(false)" title="Close Sidebar">✕</button>
       </div>
       <nav>
         <ul class="nav-menu">
-          <li class="nav-item active" data-section="overview" data-role="all"><span class="nav-item-icon">📊</span> Overview</li>
-          <li class="nav-item" data-section="queue" data-role="all"><span class="nav-item-icon">📋</span> Daily Queue</li>
-          <li class="nav-item" data-section="caller" data-role="all"><span class="nav-item-icon">📞</span> Dialer</li>
-          <li class="nav-item" data-section="sms" data-role="salesperson|manager|owner|admin"><span class="nav-item-icon">💬</span> SMS</li>
-          <li class="nav-item" data-section="whatsapp" data-role="salesperson|manager|owner|admin"><span class="nav-item-icon">📱</span> WhatsApp</li>
-          <li class="nav-item" data-section="email" data-role="all"><span class="nav-item-icon">✉️</span> Email</li>
-          <li class="nav-item" data-section="leads" data-role="salesperson|manager|owner|admin"><span class="nav-item-icon">🎯</span> All Leads</li>
-          <li class="nav-item" data-section="campaigns" data-role="manager|owner|admin"><span class="nav-item-icon">📢</span> Campaigns</li>
-          <li class="nav-item" data-section="activity" data-role="all"><span class="nav-item-icon">📜</span> Activity Log</li>
-          <li class="nav-item" data-section="team" data-role="manager|owner|admin" id="nav-team" style="display:none"><span class="nav-item-icon">👥</span> Team</li>
-          <li class="nav-item" data-section="admin" data-role="admin" id="nav-admin" style="display:none"><span class="nav-item-icon">⚙️</span> User Mgmt</li>
+          <li class="nav-item active" data-section="overview" data-role="all" onclick="switchTab('overview')"><span class="nav-item-icon">📊</span> Overview</li>
+          <li class="nav-item" data-section="queue" data-role="all" onclick="switchTab('queue')"><span class="nav-item-icon">📋</span> Daily Queue</li>
+          <li class="nav-item" data-section="caller" data-role="all" onclick="switchTab('caller')"><span class="nav-item-icon">📞</span> Dialer</li>
+          <li class="nav-item" data-section="sms" data-role="salesperson|manager|owner|admin" onclick="switchTab('sms')"><span class="nav-item-icon">💬</span> SMS</li>
+          <li class="nav-item" data-section="whatsapp" data-role="salesperson|manager|owner|admin" onclick="switchTab('whatsapp')"><span class="nav-item-icon">📱</span> WhatsApp</li>
+          <li class="nav-item" data-section="email" data-role="all" onclick="switchTab('email')"><span class="nav-item-icon">✉️</span> Email</li>
+          <li class="nav-item" data-section="leads" data-role="salesperson|manager|owner|admin" onclick="switchTab('leads')"><span class="nav-item-icon">🎯</span> All Leads</li>
+          <li class="nav-item" data-section="campaigns" data-role="manager|owner|admin" onclick="switchTab('campaigns')"><span class="nav-item-icon">📢</span> Campaigns</li>
+          <li class="nav-item" data-section="activity" data-role="all" onclick="switchTab('activity')"><span class="nav-item-icon">📜</span> Activity Log</li>
+          <li class="nav-item" data-section="team" data-role="all" id="nav-team" onclick="switchTab('team')"><span class="nav-item-icon">👥</span> Team</li>
+          <li class="nav-item" data-section="admin" data-role="all" id="nav-admin" onclick="switchTab('admin')"><span class="nav-item-icon">⚙️</span> User Mgmt</li>
         </ul>
       </nav>
       <div class="sidebar-footer">
@@ -47,11 +51,14 @@
 
     <main class="app-main">
       <header class="main-header">
-        <div class="header-title-area">
-          <h2 id="page-title">Overview</h2>
-          <p id="page-subtitle">Sales dashboard and metrics</p>
+        <div style="display:flex;align-items:center;gap:0.75rem">
+          <button id="sidebar-toggle-btn" class="btn btn-outline btn-sm sidebar-toggle" onclick="toggleMobileSidebar()" title="Toggle Menu">☰ Menu</button>
+          <div class="header-title-area">
+            <h2 id="page-title">Overview</h2>
+            <p id="page-subtitle">Sales dashboard and metrics</p>
+          </div>
         </div>
-        <div style="display:flex;align-items:center;gap:0.5rem">
+        <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
           <button id="btn-toggle-break" class="btn btn-sm btn-outline" onclick="handleToggleBreak()">☕ Start Break</button>
           <button id="btn-open-profile" class="btn btn-sm btn-outline" onclick="openProfileModal()">⚙️ Profile</button>
           <div class="status-pill" id="alerts-pill" style="display:none">
@@ -60,6 +67,21 @@
           </div>
         </div>
       </header>
+
+      <!-- Top Quick Navigation Chips (Always available across all screens) -->
+      <nav class="top-quick-nav">
+        <button class="btn-nav-chip active" data-section="overview" onclick="switchTab('overview')">📊 Overview</button>
+        <button class="btn-nav-chip" data-section="queue" onclick="switchTab('queue')">📋 Daily Queue</button>
+        <button class="btn-nav-chip" data-section="caller" onclick="switchTab('caller')">📞 Dialer</button>
+        <button class="btn-nav-chip" data-section="whatsapp" onclick="switchTab('whatsapp')">📱 WhatsApp</button>
+        <button class="btn-nav-chip" data-section="sms" onclick="switchTab('sms')">💬 SMS</button>
+        <button class="btn-nav-chip" data-section="email" onclick="switchTab('email')">✉️ Email</button>
+        <button class="btn-nav-chip" data-section="leads" onclick="switchTab('leads')">🎯 All Leads</button>
+        <button class="btn-nav-chip" data-section="campaigns" onclick="switchTab('campaigns')">📢 Campaigns</button>
+        <button class="btn-nav-chip" data-section="activity" onclick="switchTab('activity')">📜 Activity</button>
+        <button class="btn-nav-chip" data-section="team" onclick="switchTab('team')">👥 Team</button>
+        <button class="btn-nav-chip" data-section="admin" onclick="switchTab('admin')">⚙️ User Mgmt</button>
+      </nav>
 
       <!-- OVERVIEW -->
       <section class="panel-card" id="section-overview">
@@ -517,8 +539,7 @@
 
   <div id="toast-container"></div>
 
-  <script src="js/api.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/dashboard.js"></script>
+  <script src="js/api.js?v=5"></script>
+  <script src="js/dashboard.js?v=5"></script>
 </body>
 </html>

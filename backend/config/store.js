@@ -104,11 +104,15 @@ const UserStore = {
       const user = await User.findById(id).lean();
       if (!user) return null;
       const { password, ...rest } = user;
+      if (!rest.role) rest.role = 'admin';
+      if (rest.approved === undefined) rest.approved = true;
       return rest;
     }
     const user = store.users.find(u => u._id === id);
     if (!user) return null;
     const { password, ...userWithoutPassword } = user;
+    if (!userWithoutPassword.role) userWithoutPassword.role = 'admin';
+    if (userWithoutPassword.approved === undefined) userWithoutPassword.approved = true;
     return userWithoutPassword;
   },
 

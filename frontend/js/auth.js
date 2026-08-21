@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const currentPage = window.location.pathname;
 
   // 1. If on login page, clear any previous session so user MUST sign in again on every visit
-  if (currentPage.endsWith('login.html') || currentPage.endsWith('/') || currentPage === '') {
+  if (currentPage.endsWith('login.html') || document.getElementById('form-login')) {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     sessionStorage.removeItem('token');

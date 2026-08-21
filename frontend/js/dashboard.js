@@ -15,10 +15,7 @@ let isUserInCall = false;
 let liveTickerInterval = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-  if (!token) { window.location.href = 'login.html'; return; }
-
-  await loadUserProfile();
+  // 1. Initialize all interactive UI handlers immediately
   initSidebarNavigation();
   initDialpad();
   initCallActions();
@@ -31,7 +28,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   initWhatsAppTemplateActions();
   initLiveTimers();
 
-  await refreshDashboard();
+  // 2. Check auth token
+  const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+  if (!token) { window.location.href = 'login.html'; return; }
+
+  // 3. Load user profile & dashboard data
+  try { await loadUserProfile(); } catch (e) { console.error('loadUserProfile error:', e); }
+  try { await refreshDashboard(); } catch (e) { console.error('refreshDashboard error:', e); }
+
   // High-frequency real-time auto sync
   setInterval(refreshDashboard, 10000);
 
@@ -63,18 +67,44 @@ async function loadUserProfile() {
   try {
     const res = await API.getMe();
     currentUser = res.data;
-    document.getElementById('user-name-display').textContent = currentUser.name;
-    document.getElementById('user-email-display').textContent = currentUser.email;
-    document.getElementById('user-avatar-initial').textContent = currentUser.name.charAt(0).toUpperCase();
+    if (currentUser) {
+      const nameEl = document.getElementById('user-name-display');
+      const emailEl = document.getElementById('user-email-display');
+      const avatarEl = document.getElementById('user-avatar-initial');
+      if (nameEl) nameEl.textContent = currentUser.name || '';
+      if (emailEl) emailEl.textContent = currentUser.email || '';
+      if (avatarEl) avatarEl.textContent = (currentUser.name || 'U').charAt(0).toUpperCase();
 
-    if (['admin', 'owner', 'manager'].includes(currentUser.role)) {
-      document.getElementById('nav-team').style.display = 'flex';
-      document.getElementById('nav-admin').style.display = 'flex';
+      if (['admin', 'owner', 'manager'].includes(currentUser.role)) {
+        const teamNav = document.getElementById('nav-team');
+        const adminNav = document.getElementById('nav-admin');
+        if (teamNav) teamNav.style.display = 'flex';
+        if (adminNav) adminNav.style.display = 'flex';
+      }
     }
   } catch (err) { console.error('Profile error:', err); }
 }
 
+// Mobile Sidebar Drawer Toggle
+function toggleMobileSidebar(open) {
+  const sidebar = document.getElementById('app-sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  if (!sidebar) return;
+  const isOpen = typeof open === 'boolean' ? open : !sidebar.classList.contains('open');
+  sidebar.classList.toggle('open', isOpen);
+  if (backdrop) backdrop.classList.toggle('show', isOpen);
+}
+window.toggleMobileSidebar = toggleMobileSidebar;
+
+// All known section IDs — used to hide all panels before showing target
+const ALL_SECTIONS = ['overview','queue','caller','sms','whatsapp','email','leads','campaigns','activity','team','admin'];
+
 function switchTab(section) {
+  if (!section) return;
+
+  // Auto-close mobile drawer on link click
+  toggleMobileSidebar(false);
+
   const titles = {
     overview: ['Overview', 'Sales dashboard and metrics'],
     queue: ['Daily Queue', 'Your assigned leads for today'],
@@ -89,29 +119,54 @@ function switchTab(section) {
     admin: ['User Management', 'Approve and manage users']
   };
 
-  const navItems = document.querySelectorAll('.nav-item');
-  navItems.forEach(i => {
+  // Update sidebar active state
+  document.querySelectorAll('.nav-item').forEach(i => {
     i.classList.toggle('active', i.getAttribute('data-section') === section);
   });
-  document.querySelectorAll('.app-main .panel-card, .app-main .metrics-row').forEach(el => {
-    if (el.closest('.panel-card')) el.closest('.panel-card').style.display = 'none';
+
+  // Update top quick nav chip active state
+  document.querySelectorAll('.btn-nav-chip').forEach(i => {
+    i.classList.toggle('active', i.getAttribute('data-section') === section);
   });
+
+  // Hide ALL sections by ID — safe and explicit
+  ALL_SECTIONS.forEach(id => {
+    const el = document.getElementById(`section-${id}`);
+    if (el) el.style.display = 'none';
+  });
+
+  // Show the target section
   const panel = document.getElementById(`section-${section}`);
-  if (panel) panel.style.display = 'block';
-  const [t, s] = titles[section] || ['', ''];
+  if (panel) {
+    panel.style.display = 'flex';
+  }
+
+  // Update header text
+  const [t, s] = titles[section] || [section.toUpperCase(), ''];
   const titleEl = document.getElementById('page-title');
   const subEl = document.getElementById('page-subtitle');
   if (titleEl) titleEl.textContent = t;
   if (subEl) subEl.textContent = s;
 
-  if (section === 'queue') fetchQueue();
-  if (section === 'leads') fetchLeads();
-  if (section === 'campaigns') fetchCampaigns();
-  if (section === 'activity') fetchActivity();
-  if (section === 'team') fetchTeamMetrics();
-  if (section === 'admin') fetchAdminData();
-  if (section === 'whatsapp') fetchWhatsAppTemplates();
+  // Scroll to top of view
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  // Trigger data fetch for sections safely in background
+  try {
+    if (section === 'queue') fetchQueue().catch(e => console.error('Queue fetch:', e));
+    if (section === 'leads') fetchLeads().catch(e => console.error('Leads fetch:', e));
+    if (section === 'campaigns') fetchCampaigns().catch(e => console.error('Campaigns fetch:', e));
+    if (section === 'activity') fetchActivity().catch(e => console.error('Activity fetch:', e));
+    if (section === 'team') fetchTeamMetrics().catch(e => console.error('Team fetch:', e));
+    if (section === 'admin') fetchAdminData().catch(e => console.error('Admin fetch:', e));
+    if (section === 'whatsapp') fetchWhatsAppTemplates().catch(e => console.error('WA fetch:', e));
+  } catch (err) {
+    console.error('switchTab error:', err);
+  }
 }
+
+window.switchTab = switchTab;
+window.switchTabWithFilter = switchTabWithFilter;
 
 function switchTabWithFilter(section, statusFilter) {
   switchTab(section);
@@ -224,6 +279,9 @@ async function refreshDashboard(forceToast = false) {
       const activeAlerts = alertsRes.data.filter(a => !dismissed.includes(a.category));
       if (activeAlerts.length > 0) {
         document.getElementById('alerts-text').textContent = `${activeAlerts.length} alert(s)`;
+        // Remove any existing alerts list before inserting a fresh one (prevents accumulation on each refresh)
+        const existingAlertsList = document.querySelector('.alerts-list');
+        if (existingAlertsList) existingAlertsList.remove();
         let alertsHtml = '<div class="alerts-list">';
         activeAlerts.forEach(a => {
           const icon = a.type === 'error' ? '🔴' : a.type === 'warning' ? '🟡' : '🔵';
@@ -345,10 +403,6 @@ function loadLeadForCall(leadId, phone) {
   showToast('Lead loaded into dialer', 'info');
 }
 
-function switchTab(section) {
-  const navItem = document.querySelector(`.nav-item[data-section="${section}"]`);
-  if (navItem) navItem.click();
-}
 
 /* ======================== DIALPAD ======================== */
 function initDialpad() {
@@ -576,8 +630,13 @@ function initEmailActions() {
 }
 
 function showEmailTab(tab) {
-  document.querySelectorAll('#section-email .tab-btn').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
+  document.querySelectorAll('#section-email .tab-btn').forEach(b => {
+    const btnText = b.textContent.toLowerCase();
+    const isActive = (tab === 'compose' && btnText.includes('compose')) ||
+                     (tab === 'templates' && btnText.includes('template')) ||
+                     (tab === 'inboxes' && btnText.includes('inbox'));
+    b.classList.toggle('active', isActive);
+  });
   document.getElementById('email-compose-tab').style.display = tab === 'compose' ? 'block' : 'none';
   document.getElementById('email-templates-tab').style.display = tab === 'templates' ? 'block' : 'none';
   document.getElementById('email-inboxes-tab').style.display = tab === 'inboxes' ? 'block' : 'none';
@@ -926,8 +985,8 @@ async function fetchTeamMetrics() {
   try {
     const res = await API.getMetrics();
     const container = document.getElementById('team-metrics');
-    if (currentUser.role === 'salesperson') {
-      container.innerHTML = '<div class="empty-placeholder">Team view is for managers only.</div>';
+    if (!currentUser || currentUser.role === 'salesperson') {
+      if (container) container.innerHTML = '<div class="empty-placeholder">Team view is for managers only.</div>';
       return;
     }
     const data = res.data;
@@ -1281,8 +1340,14 @@ function initWhatsAppActions() {
 }
 
 function showWhatsAppTab(tab) {
-  document.querySelectorAll('#section-whatsapp .tab-btn').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
+  document.querySelectorAll('#section-whatsapp .tab-btn').forEach(b => {
+    // Match by text content since tabs are compose/templates/history
+    const btnText = b.textContent.toLowerCase();
+    const isActive = (tab === 'compose' && btnText.includes('compose')) ||
+                     (tab === 'templates' && btnText.includes('template')) ||
+                     (tab === 'history' && (btnText.includes('history') || btnText.includes('delivery')));
+    b.classList.toggle('active', isActive);
+  });
   document.getElementById('wa-compose-tab').style.display = tab === 'compose' ? 'block' : 'none';
   document.getElementById('wa-templates-tab').style.display = tab === 'templates' ? 'block' : 'none';
   document.getElementById('wa-history-tab').style.display = tab === 'history' ? 'block' : 'none';
@@ -1554,3 +1619,16 @@ async function triggerLeadCrmHandoff(leadId) {
     showToast(err.message, 'error');
   }
 }
+
+function logoutUser() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  sessionStorage.removeItem('token');
+  sessionStorage.removeItem('user');
+  if (typeof showToast === 'function') showToast('Logged out of session.', 'info');
+  setTimeout(() => {
+    window.location.href = 'login.html';
+  }, 300);
+}
+window.logoutUser = logoutUser;
+

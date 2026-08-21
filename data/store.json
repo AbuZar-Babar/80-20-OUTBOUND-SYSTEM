@@ -5,6 +5,8 @@
       "name": "Test User",
       "email": "test@example.com",
       "password": "$2a$10$lTy5HiIxwoqJ0b3Q3mI/ZOFVf3IMxEcnDOpSOEDo3m5K6XJxYLTYi",
+      "role": "admin",
+      "approved": true,
       "createdAt": "2026-08-18T15:22:37.354Z"
     },
     {
@@ -12,6 +14,8 @@
       "name": "SHEHROZ",
       "email": "shujahatk17@gmail.com",
       "password": "$2a$10$WBcsIEQi4bWuUQm1KDAJ3exKrvKJ3ryT7F0vyFkdUdukviHSW9E6m",
+      "role": "admin",
+      "approved": true,
       "createdAt": "2026-08-18T15:24:24.554Z"
     },
     {
@@ -19,6 +23,8 @@
       "name": "Alice Smith",
       "email": "alice@example.com",
       "password": "$2a$10$ImQRYYB7I7NlirkgKg1mpOYO5gi0Si2d5vBtobzyqUJteacjs1Ldu",
+      "role": "admin",
+      "approved": true,
       "createdAt": "2026-08-18T15:27:04.072Z"
     },
     {
@@ -26,6 +32,8 @@
       "name": "Verification User",
       "email": "test_1787067192092@example.com",
       "password": "$2a$10$tYvyBSSVT9q1utnwV8WjvuxjsPCckB3STndrUSvlNHr5RDRoX8qwi",
+      "role": "admin",
+      "approved": true,
       "createdAt": "2026-08-18T15:33:12.292Z"
     },
     {
@@ -33,6 +41,8 @@
       "name": "Verification User",
       "email": "test_1787067208705@example.com",
       "password": "$2a$10$Z0VaOAeHIRY06RThsXOVDetJyUdjTDWqOctZluJ9i7raoiYiUlBW.",
+      "role": "admin",
+      "approved": true,
       "createdAt": "2026-08-18T15:33:28.894Z"
     },
     {
@@ -40,6 +50,8 @@
       "name": "Verification User",
       "email": "test_1787067229709@example.com",
       "password": "$2a$10$qmPrr0d.Vusb.9GjtwagpO7GbNFM4AuXtXvDIwyQjkq7VlCOnnoWK",
+      "role": "admin",
+      "approved": true,
       "createdAt": "2026-08-18T15:33:49.922Z"
     },
     {
@@ -47,7 +59,7 @@
       "name": "Agent Smith",
       "email": "smith_1787249725697@test.com",
       "password": "$2a$10$YJqfD6X/hXqeWH7apX7U4.9enayK6DHnTvF/QYux2.axZSQfLOEa2",
-      "role": "salesperson",
+      "role": "admin",
       "approved": true,
       "createdAt": "2026-08-20T18:15:25.815Z"
     }
