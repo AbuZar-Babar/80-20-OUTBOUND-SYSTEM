@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="80/20 Essential Dialer - Outbound Sales System">
+  <title>80/20 Essential Dialer</title>
+  <link rel="stylesheet" href="css/style.css?v=5">
+</head>
+<body>
+
+  <!-- Mobile Sidebar Backdrop Overlay -->
+  <div id="sidebar-backdrop" class="sidebar-backdrop" onclick="toggleMobileSidebar(false)"></div>
+
+  <div class="app-layout">
+    <aside class="app-sidebar" id="app-sidebar">
+      <div class="brand-header">
+        <div class="brand-logo">80</div>
+        <div class="brand-info">
+          <h1>80/20 Dialer</h1>
+          <span>Essential V1</span>
+        </div>
+        <button class="mobile-sidebar-close btn btn-outline btn-sm" onclick="toggleMobileSidebar(false)" title="Close Sidebar">✕</button>
+      </div>
+      <nav>
+        <ul class="nav-menu">
+          <li class="nav-item active" data-section="overview" data-role="all" onclick="switchTab('overview')"><span class="nav-item-icon">📊</span> Overview</li>
+          <li class="nav-item" data-section="queue" data-role="all" onclick="switchTab('queue')"><span class="nav-item-icon">📋</span> Daily Queue</li>
+          <li class="nav-item" data-section="caller" data-role="all" onclick="switchTab('caller')"><span class="nav-item-icon">📞</span> Dialer</li>
+          <li class="nav-item" data-section="sms" data-role="salesperson|manager|owner|admin" onclick="switchTab('sms')"><span class="nav-item-icon">💬</span> SMS</li>
+          <li class="nav-item" data-section="whatsapp" data-role="salesperson|manager|owner|admin" onclick="switchTab('whatsapp')"><span class="nav-item-icon">📱</span> WhatsApp</li>
+          <li class="nav-item" data-section="email" data-role="all" onclick="switchTab('email')"><span class="nav-item-icon">✉️</span> Email</li>
+          <li class="nav-item" data-section="leads" data-role="salesperson|manager|owner|admin" onclick="switchTab('leads')"><span class="nav-item-icon">🎯</span> All Leads</li>
+          <li class="nav-item" data-section="campaigns" data-role="manager|owner|admin" onclick="switchTab('campaigns')"><span class="nav-item-icon">📢</span> Campaigns</li>
+          <li class="nav-item" data-section="activity" data-role="all" onclick="switchTab('activity')"><span class="nav-item-icon">📜</span> Activity Log</li>
+          <li class="nav-item" data-section="team" data-role="all" id="nav-team" onclick="switchTab('team')"><span class="nav-item-icon">👥</span> Team</li>
+          <li class="nav-item" data-section="admin" data-role="all" id="nav-admin" onclick="switchTab('admin')"><span class="nav-item-icon">⚙️</span> User Mgmt</li>
+        </ul>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="user-avatar-circle" id="user-avatar-initial">U</div>
+          <div class="user-details">
+            <div class="user-name-text" id="user-name-display">Loading...</div>
+            <div class="user-email-text" id="user-email-display"></div>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="logoutUser()" title="Logout">🚪</button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="app-main">
+      <header class="main-header">
+        <div style="display:flex;align-items:center;gap:0.75rem">
+          <button id="sidebar-toggle-btn" class="btn btn-outline btn-sm sidebar-toggle" onclick="toggleMobileSidebar()" title="Toggle Menu">☰ Menu</button>
+          <div class="header-title-area">
+            <h2 id="page-title">Overview</h2>
+            <p id="page-subtitle">Sales dashboard and metrics</p>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+          <button id="btn-toggle-break" class="btn btn-sm btn-outline" onclick="handleToggleBreak()">☕ Start Break</button>
+          <button id="btn-open-profile" class="btn btn-sm btn-outline" onclick="openProfileModal()">⚙️ Profile</button>
+          <div class="status-pill" id="alerts-pill" style="display:none">
+            <span class="status-pulse-dot"></span>
+            <span id="alerts-text">0 alerts</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Top Quick Navigation Chips (Always available across all screens) -->
+      <nav class="top-quick-nav">
+        <button class="btn-nav-chip active" data-section="overview" onclick="switchTab('overview')">📊 Overview</button>
+        <button class="btn-nav-chip" data-section="queue" onclick="switchTab('queue')">📋 Daily Queue</button>
+        <button class="btn-nav-chip" data-section="caller" onclick="switchTab('caller')">📞 Dialer</button>
+        <button class="btn-nav-chip" data-section="whatsapp" onclick="switchTab('whatsapp')">📱 WhatsApp</button>
+        <button class="btn-nav-chip" data-section="sms" onclick="switchTab('sms')">💬 SMS</button>
+        <button class="btn-nav-chip" data-section="email" onclick="switchTab('email')">✉️ Email</button>
+        <button class="btn-nav-chip" data-section="leads" onclick="switchTab('leads')">🎯 All Leads</button>
+        <button class="btn-nav-chip" data-section="campaigns" onclick="switchTab('campaigns')">📢 Campaigns</button>
+        <button class="btn-nav-chip" data-section="activity" onclick="switchTab('activity')">📜 Activity</button>
+        <button class="btn-nav-chip" data-section="team" onclick="switchTab('team')">👥 Team</button>
+        <button class="btn-nav-chip" data-section="admin" onclick="switchTab('admin')">⚙️ User Mgmt</button>
+      </nav>
+
+      <!-- OVERVIEW -->
+      <section class="panel-card" id="section-overview">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap;gap:0.75rem;border-bottom:1px solid var(--border-subtle);padding-bottom:0.85rem;">
+          <div>
+            <h3 class="panel-title" style="font-size:1.15rem;display:flex;align-items:center;gap:0.4rem;">⚡ Real-Time Outreach Station</h3>
+            <p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.2rem">Click any tile or action button below to immediately work your pipeline in real time.</p>
+          </div>
+          <div style="display:flex;gap:0.45rem;flex-wrap:wrap;">
+            <button class="btn btn-emerald btn-sm" onclick="startQueueDialing()" title="Auto-load and dial highest priority lead">🚀 Start Next Lead</button>
+            <button class="btn btn-outline btn-sm" onclick="switchTab('queue')" title="Open Daily Lead Queue">📋 Daily Queue</button>
+            <button class="btn btn-outline btn-sm" onclick="switchTab('whatsapp')" title="Open WhatsApp Station">📱 WhatsApp</button>
+            <button class="btn btn-outline btn-sm" onclick="switchTab('sms')" title="Open SMS Station">💬 SMS</button>
+            <button class="btn btn-outline btn-sm" onclick="switchTab('email')" title="Open Email Station">✉️ Email</button>
+            <button class="btn btn-outline btn-sm" onclick="refreshDashboard(true)" title="Force Instant Real-Time Refresh">🔄 Refresh</button>
+          </div>
+        </div>
+
+        <div class="metrics-row">
+          <div class="metric-card clickable-tile" onclick="switchTab('leads')" title="Click to view all assigned leads"><div class="metric-data"><span>Assigned Leads</span><div class="metric-value" id="m-total">0</div></div><div class="metric-icon icon-indigo">🎯</div></div>
+          <div class="metric-card clickable-tile" onclick="switchTabWithFilter('leads', 'contacted')" title="Click to view contacted leads"><div class="metric-data"><span>Contacted</span><div class="metric-value" id="m-contacted">0</div></div><div class="metric-icon icon-cyan">📞</div></div>
+          <div class="metric-card clickable-tile" onclick="switchTabWithFilter('leads', 'interested')" title="Click to view interested leads"><div class="metric-data"><span>Interested</span><div class="metric-value" id="m-interested">0</div></div><div class="metric-icon icon-emerald">🔥</div></div>
+          <div class="metric-card clickable-tile" onclick="switchTabWithFilter('leads', 'meeting-booked')" title="Click to view booked meetings"><div class="metric-data"><span>Booked</span><div class="metric-value" id="m-booked">0</div></div><div class="metric-icon icon-rose">📅</div></div>
+        </div>
+        <div class="metrics-row">
+          <div class="metric-card clickable-tile" onclick="switchTab('caller')" title="Click to open Voice Dialer"><div class="metric-data"><span>Calls Today</span><div class="metric-value" id="m-calls-today">0</div></div><div class="metric-icon icon-indigo">📞</div></div>
+          <div class="metric-card clickable-tile" onclick="switchTab('email')" title="Click to open Email Station"><div class="metric-data"><span>Emails Today</span><div class="metric-value" id="m-emails-today">0</div></div><div class="metric-icon icon-cyan">✉️</div></div>
+          <div class="metric-card clickable-tile" onclick="switchTab('sms')" title="Click to open SMS Station"><div class="metric-data"><span>SMS Today</span><div class="metric-value" id="m-sms-today">0</div></div><div class="metric-icon icon-emerald">💬</div></div>
+          <div class="metric-card clickable-tile" onclick="switchTab('whatsapp')" title="Click to open WhatsApp Station"><div class="metric-data"><span>WhatsApp Today</span><div class="metric-value" id="m-wa-today">0</div></div><div class="metric-icon icon-emerald">📱</div></div>
+          <div class="metric-card clickable-tile" onclick="switchTab('queue')" title="Click to view Overdue Callbacks"><div class="metric-data"><span>Overdue Callbacks</span><div class="metric-value" id="m-overdue" style="color: var(--accent-rose);">0</div></div><div class="metric-icon icon-rose">⚠️</div></div>
+        </div>
+        <div class="metrics-row">
+          <div class="metric-card clickable-tile" onclick="switchTab('queue')" title="Click to view daily target progress"><div class="metric-data"><span>Daily Target</span><div class="metric-value" id="m-target-progress">--</div></div><div class="metric-icon icon-indigo">🎯</div></div>
+          <div class="metric-card"><div class="metric-data"><span>Calls / Hour</span><div class="metric-value" id="m-calls-per-hour">0</div></div><div class="metric-icon icon-cyan">⚡</div></div>
+          <div class="metric-card"><div class="metric-data"><span>Active Time</span><div class="metric-value" id="m-active-time">00:00</div></div><div class="metric-icon icon-cyan">⏱️</div></div>
+          <div class="metric-card clickable-tile" onclick="handleToggleBreak()" title="Click to toggle Break in real time"><div class="metric-data"><span>Break Time</span><div class="metric-value" id="m-break-time" style="color:var(--accent-amber)">00:00</div></div><div class="metric-icon icon-amber">☕</div></div>
+          <div class="metric-card clickable-tile" onclick="switchTab('caller')" title="Click to open Dialer"><div class="metric-data"><span>Dialing Time</span><div class="metric-value" id="m-dialing-time">00:00</div></div><div class="metric-icon icon-emerald">📞</div></div>
+          <div class="metric-card"><div class="metric-data"><span>Booking Rate</span><div class="metric-value" id="m-booking-rate">0%</div></div><div class="metric-icon icon-rose">📈</div></div>
+        </div>
+      </section>
+
+      <!-- DAILY QUEUE -->
+      <section class="panel-card" id="section-queue" style="display:none">
+        <div class="panel-header">
+          <h3 class="panel-title">📋 Daily Queue</h3>
+          <button class="btn btn-outline btn-sm" onclick="fetchQueue()">Refresh</button>
+        </div>
+        <div id="queue-replies" style="margin-bottom:1rem"></div>
+        <div id="queue-overdue" style="margin-bottom:1rem"></div>
+        <div id="queue-due-today" style="margin-bottom:1rem"></div>
+        <div id="queue-interested" style="margin-bottom:1rem"></div>
+        <div id="queue-new"></div>
+      </section>
+
+      <!-- DIALER -->
+      <section class="panel-card" id="section-caller" style="display:none">
+        <div class="panel-header">
+          <h3 class="panel-title">📞 Voice Call Station</h3>
+          <span style="font-size:0.75rem;color:var(--accent-cyan);font-weight:600;">E.164 Standard</span>
+        </div>
+        <div class="phone-widget">
+          <div class="screen-box">
+            <input type="tel" id="call-phone-input" class="phone-display-input" placeholder="+923001234567" autocomplete="tel">
+            <div class="call-state-bar">
+              <span class="status-dot" id="call-status-dot"></span>
+              <span id="call-status-label">Status: Ready</span>
+              <span style="margin:0 0.4rem;opacity:0.3">|</span>
+              <span class="live-timer" id="call-timer-display">00:00</span>
+            </div>
+          </div>
+          <div class="dialpad-grid">
+            <button class="num-btn" data-digit="1">1</button><button class="num-btn" data-digit="2">2<sub>ABC</sub></button><button class="num-btn" data-digit="3">3<sub>DEF</sub></button>
+            <button class="num-btn" data-digit="4">4<sub>GHI</sub></button><button class="num-btn" data-digit="5">5<sub>JKL</sub></button><button class="num-btn" data-digit="6">6<sub>MNO</sub></button>
+            <button class="num-btn" data-digit="7">7<sub>PQRS</sub></button><button class="num-btn" data-digit="8">8<sub>TUV</sub></button><button class="num-btn" data-digit="9">9<sub>WXYZ</sub></button>
+            <button class="num-btn" data-digit="*">*</button><button class="num-btn" data-digit="0">0<sub>+</sub></button><button class="num-btn" data-digit="#">#</button>
+          </div>
+          <div class="action-row">
+            <button id="btn-make-call" class="btn btn-emerald" style="flex:1;padding:0.85rem;">📞 CALL NOW</button>
+            <button id="btn-end-call" class="btn btn-rose" style="display:none;padding:0.85rem;">📵 END</button>
+            <button id="clear-phone-btn" class="btn btn-outline">✕ Clear</button>
+          </div>
+        </div>
+        <div class="outcome-panel" id="outcome-panel" style="display:none;margin-top:1.5rem">
+          <h4 style="margin-bottom:0.75rem;">Set Outcome</h4>
+          <div class="outcome-grid">
+            <button class="btn btn-sm btn-outline" onclick="setOutcome('no-answer')">No Answer</button>
+            <button class="btn btn-sm btn-outline" onclick="setOutcome('busy')">Busy</button>
+            <button class="btn btn-sm btn-outline" onclick="setOutcome('voicemail')">Voicemail</button>
+            <button class="btn btn-sm btn-outline" onclick="showCallbackForm()">Callback</button>
+            <button class="btn btn-sm btn-outline" onclick="setOutcome('send-info')">Send Info</button>
+            <button class="btn btn-sm btn-emerald" onclick="setOutcome('interested')">Interested</button>
+            <button class="btn btn-sm btn-primary" onclick="showBookingForm()">Book Meeting</button>
+            <button class="btn btn-sm btn-outline" onclick="setOutcome('not-interested')">Not Interested</button>
+            <button class="btn btn-sm btn-rose" onclick="setOutcome('dnc')">DNC</button>
+          </div>
+          <div class="form-group" style="margin-top:1rem">
+            <label class="form-label">Call Notes</label>
+            <textarea id="call-notes" class="input-control" rows="2" placeholder="Notes about this call..."></textarea>
+          </div>
+          <div id="callback-form" style="display:none;margin-top:1rem">
+            <div class="form-group">
+              <label class="form-label">Callback Date & Time</label>
+              <input type="datetime-local" id="callback-datetime" class="input-control">
+            </div>
+          </div>
+          <div id="booking-form" style="display:none;margin-top:1rem">
+            <div class="form-group"><label class="form-label">Meeting Date & Time</label><input type="datetime-local" id="booking-datetime" class="input-control"></div>
+            <div class="form-group">
+              <label class="form-label">Select Closer</label>
+              <select id="booking-closer-select" class="input-control" onchange="handleCloserSelect()">
+                <option value="">-- Select Closer --</option>
+              </select>
+              <div style="margin-top:0.4rem">
+                <a id="closer-calendar-btn" href="#" target="_blank" class="btn btn-sm btn-outline" style="display:none">📅 Open Closer Calendar</a>
+              </div>
+            </div>
+            <div class="form-group"><label class="form-label">Meeting / Calendar Link</label><input type="url" id="booking-link" class="input-control" placeholder="https://..."></div>
+          </div>
+          <button id="btn-submit-outcome" class="btn btn-primary" style="width:100%;margin-top:1rem;padding:0.85rem;display:none" onclick="submitOutcome()">Submit Outcome</button>
+        </div>
+      </section>
+
+      <!-- SMS -->
+      <section class="panel-card" id="section-sms" style="display:none">
+        <div class="panel-header"><h3 class="panel-title">💬 SMS Station</h3></div>
+        <form id="form-send-sms">
+          <div class="form-group"><label class="form-label">Recipient (E.164)</label><input type="tel" id="sms-recipient-input" class="input-control" placeholder="+923001234567" required></div>
+          <div class="form-group" style="flex:1"><div style="display:flex;justify-content:space-between"><label class="form-label">Message</label><span id="sms-char-counter" style="font-size:0.75rem;color:var(--text-muted)">0/160</span></div><textarea id="sms-body-input" class="input-control" rows="4" required style="resize:vertical;min-height:120px;margin-top:0.4rem"></textarea></div>
+          <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1rem;padding:0.85rem">✉️ SEND SMS</button>
+        </form>
+      </section>
+
+      <!-- WHATSAPP -->
+      <section class="panel-card" id="section-whatsapp" style="display:none">
+        <div class="panel-header" style="flex-wrap:wrap;gap:0.5rem">
+          <div>
+            <h3 class="panel-title">📱 WhatsApp Station</h3>
+            <p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.25rem">Direct 1-on-1 messaging, pre-approved templates, booking link insertion & reply tracking.</p>
+          </div>
+        </div>
+        <div class="tab-bar" style="margin-bottom:1rem">
+          <button class="tab-btn active" onclick="showWhatsAppTab('compose')">Compose</button>
+          <button class="tab-btn" onclick="showWhatsAppTab('templates')">Templates</button>
+          <button class="tab-btn" onclick="showWhatsAppTab('history')">History & Delivery</button>
+        </div>
+        <div id="wa-compose-tab">
+          <!-- Loaded Lead Info Banner -->
+          <div id="wa-lead-banner" style="display:none;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:var(--radius-sm);padding:0.6rem 0.85rem;margin-bottom:1rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <strong id="wa-lead-name" style="color:var(--accent-emerald)">Loaded Lead</strong>
+                <span id="wa-lead-company" style="font-size:0.8rem;color:var(--text-muted);margin-left:0.5rem"></span>
+              </div>
+              <span id="wa-lead-hours-badge" class="badge" style="font-size:0.7rem"></span>
+            </div>
+          </div>
+
+          <form id="form-send-whatsapp">
+            <div style="margin-bottom:0.75rem;">
+              <div class="form-group"><label class="form-label">Recipient Phone (E.164)</label><input type="tel" id="wa-recipient-input" class="input-control" placeholder="+1234567890" required></div>
+              <input type="hidden" id="wa-lead-id">
+            </div>
+
+            <div class="form-group" style="margin-bottom:0.75rem;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem;">
+                <label class="form-label" style="margin-bottom:0">Message Template</label>
+                <div style="display:flex;gap:0.4rem">
+                  <button type="button" class="btn btn-outline btn-sm" style="font-size:0.75rem;padding:0.2rem 0.5rem" onclick="insertWhatsAppBookingLink()">📅 Insert Booking Link</button>
+                  <button type="button" class="btn btn-outline btn-sm" style="font-size:0.75rem;padding:0.2rem 0.5rem" onclick="showWhatsAppTemplateModal()">+ New</button>
+                </div>
+              </div>
+              <select id="wa-template-select" class="input-control" onchange="applyWhatsAppTemplate()"><option value="">Select a template...</option></select>
+            </div>
+
+            <!-- Quick merge tags -->
+            <div style="display:flex;gap:0.35rem;flex-wrap:wrap;margin-bottom:0.5rem;">
+              <span style="font-size:0.75rem;color:var(--text-muted);align-self:center">Insert tag:</span>
+              <button type="button" class="btn btn-outline btn-sm" style="font-size:0.7rem;padding:0.15rem 0.4rem" onclick="insertWhatsAppTag('{{first_name}}')">{{first_name}}</button>
+              <button type="button" class="btn btn-outline btn-sm" style="font-size:0.7rem;padding:0.15rem 0.4rem" onclick="insertWhatsAppTag('{{company}}')">{{company}}</button>
+              <button type="button" class="btn btn-outline btn-sm" style="font-size:0.7rem;padding:0.15rem 0.4rem" onclick="insertWhatsAppTag('{{booking_link}}')">{{booking_link}}</button>
+              <button type="button" class="btn btn-outline btn-sm" style="font-size:0.7rem;padding:0.15rem 0.4rem" onclick="insertWhatsAppTag('{{sender_name}}')">{{sender_name}}</button>
+            </div>
+
+            <div class="form-group" style="flex:1">
+              <div style="display:flex;justify-content:space-between">
+                <label class="form-label">Message Body</label>
+                <span id="wa-char-counter" style="font-size:0.75rem;color:var(--text-muted)">0/1024</span>
+              </div>
+              <textarea id="wa-body-input" class="input-control" rows="5" required style="resize:vertical;min-height:130px;margin-top:0.3rem" placeholder="Type WhatsApp message here..."></textarea>
+            </div>
+            <button type="submit" class="btn btn-emerald" style="width:100%;margin-top:1rem;padding:0.85rem;font-weight:600">📱 SEND WHATSAPP MESSAGE</button>
+          </form>
+        </div>
+        <div id="wa-templates-tab" style="display:none">
+          <div class="panel-header"><h3 class="panel-title" style="font-size:1rem">WhatsApp Templates</h3><button class="btn btn-primary btn-sm" onclick="showWhatsAppTemplateModal()">+ New Template</button></div>
+          <div id="wa-templates-list"><div class="empty-placeholder">Loading templates...</div></div>
+          <div style="margin-top:0.75rem;font-size:0.75rem;color:var(--text-muted)">Merge fields: {{first_name}}, {{name}}, {{company}}, {{booking_link}}, {{closer_name}}, {{sender_name}}, {{position}}, {{city}}, {{phone}}</div>
+        </div>
+        <div id="wa-history-tab" style="display:none">
+          <div class="panel-header"><h3 class="panel-title" style="font-size:1rem">Message History & Delivery Status</h3><button class="btn btn-outline btn-sm" onclick="fetchWhatsAppHistory()">Refresh</button></div>
+          <div id="wa-history-list"><div class="empty-placeholder">Loading history...</div></div>
+        </div>
+      </section>
+
+      <!-- EMAIL -->
+      <section class="panel-card" id="section-email" style="display:none">
+        <div class="panel-header"><h3 class="panel-title">✉️ Email Station</h3></div>
+        <div class="tab-bar" style="margin-bottom:1rem">
+          <button class="tab-btn active" onclick="showEmailTab('compose')">Compose</button>
+          <button class="tab-btn" onclick="showEmailTab('templates')">Templates</button>
+          <button class="tab-btn" onclick="showEmailTab('inboxes')">Sending Inboxes</button>
+        </div>
+        <div id="email-compose-tab">
+          <form id="form-send-email">
+            <input type="hidden" id="email-lead-id">
+            <div class="form-group"><label class="form-label">To Email</label><input type="email" id="email-to" class="input-control" placeholder="lead@example.com" required></div>
+            <div class="form-group"><label class="form-label">Sending Inbox</label><select id="email-inbox-select" class="input-control"><option value="">Default (System SendGrid)</option></select></div>
+            <div class="form-group"><label class="form-label">Subject</label><input type="text" id="email-subject" class="input-control" placeholder="Email subject" required></div>
+            <div class="form-group" style="flex:1"><label class="form-label">Body (HTML supported)</label><textarea id="email-body" class="input-control" rows="6" required style="resize:vertical;min-height:150px;margin-top:0.4rem"></textarea></div>
+            <div class="form-group"><label class="form-label">Use Template (optional)</label><select id="email-template-select" class="input-control" onchange="applyEmailTemplate()"><option value="">No template</option></select></div>
+            <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1rem;padding:0.85rem">✉️ SEND EMAIL</button>
+            <div id="email-limit-info" style="text-align:center;font-size:0.75rem;color:var(--text-muted);margin-top:0.5rem"></div>
+          </form>
+        </div>
+        <div id="email-templates-tab" style="display:none">
+          <div class="panel-header"><h3 class="panel-title" style="font-size:1rem">Email Templates</h3><button class="btn btn-primary btn-sm" onclick="showTemplateModal()">+ New Template</button></div>
+          <div id="templates-list"><div class="empty-placeholder">Loading templates...</div></div>
+          <div style="margin-top:0.75rem;font-size:0.75rem;color:var(--text-muted)">Merge fields: {{name}}, {{first_name}}, {{company}}, {{position}}, {{city}}, {{country}}, {{phone}}, {{email}}, {{website}}, {{niche}}</div>
+        </div>
+        <div id="email-inboxes-tab" style="display:none">
+          <div class="panel-header"><h3 class="panel-title" style="font-size:1rem">Connected Sending Inboxes</h3><button class="btn btn-primary btn-sm" onclick="showCreateInboxModal()">+ Add Inbox</button></div>
+          <div id="inboxes-list"><div class="empty-placeholder">Loading inboxes...</div></div>
+        </div>
+      </section>
+
+      <!-- ALL LEADS -->
+      <section class="panel-card" id="section-leads" style="display:none">
+        <div class="panel-header">
+          <h3 class="panel-title">🎯 All Leads</h3>
+          <div style="display:flex;gap:0.5rem">
+            <button class="btn btn-outline btn-sm" onclick="showUploadModal()">Upload CSV</button>
+            <button class="btn btn-outline btn-sm" onclick="fetchLeads()">Refresh</button>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Company</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="leads-tbody"><tr><td colspan="6" class="empty-placeholder">Loading leads...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- CAMPAIGNS -->
+      <section class="panel-card" id="section-campaigns" style="display:none">
+        <div class="panel-header">
+          <h3 class="panel-title">📢 Campaigns</h3>
+          <button class="btn btn-primary btn-sm" onclick="showCampaignModal()">+ New Campaign</button>
+        </div>
+        <div id="campaigns-list"><div class="empty-placeholder">Loading campaigns...</div></div>
+      </section>
+
+      <!-- ACTIVITY -->
+      <section class="panel-card" id="section-activity" style="display:none">
+        <div class="panel-header">
+          <h3 class="panel-title">📜 Activity Log</h3>
+          <button class="btn btn-outline btn-sm" onclick="fetchActivity()">Refresh</button>
+        </div>
+        <div id="activity-list"><div class="empty-placeholder">Loading activity...</div></div>
+      </section>
+
+      <!-- TEAM -->
+      <section class="panel-card" id="section-team" style="display:none">
+        <div class="panel-header"><h3 class="panel-title">👥 Team Dashboard</h3></div>
+        <div id="team-metrics"><div class="empty-placeholder">Loading team metrics...</div></div>
+      </section>
+
+      <!-- ADMIN -->
+      <section class="panel-card" id="section-admin" style="display:none">
+        <div class="panel-header" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-start;">
+          <div>
+            <h3 class="panel-title">⚙️ User & Access Management</h3>
+            <p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.25rem">Approve registrations, monitor active members, promote to manager, and control role permissions.</p>
+          </div>
+          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            <input type="text" id="admin-user-search" class="input-control" placeholder="Search user..." style="padding:0.4rem 0.75rem;font-size:0.85rem;width:180px;" oninput="filterAdminUsers()">
+            <button class="btn btn-outline btn-sm" onclick="fetchAdminData()">🔄 Refresh</button>
+          </div>
+        </div>
+
+        <!-- Admin Quick Stats -->
+        <div class="metrics-row" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); margin-bottom: 1.25rem; gap: 0.75rem;">
+          <div class="metric-card" style="padding:0.85rem 1rem">
+            <div class="metric-label">Total Registered</div>
+            <div class="metric-val" id="stat-admin-total" style="font-size:1.4rem">0</div>
+          </div>
+          <div class="metric-card" style="padding:0.85rem 1rem">
+            <div class="metric-label">🟢 Online Now</div>
+            <div class="metric-val" id="stat-admin-online" style="font-size:1.4rem;color:var(--accent-emerald)">0</div>
+          </div>
+          <div class="metric-card" style="padding:0.85rem 1rem">
+            <div class="metric-label">⏳ Pending Approvals</div>
+            <div class="metric-val" id="stat-admin-pending" style="font-size:1.4rem;color:var(--accent-amber)">0</div>
+          </div>
+          <div class="metric-card" style="padding:0.85rem 1rem">
+            <div class="metric-label">👔 Managers</div>
+            <div class="metric-val" id="stat-admin-managers" style="font-size:1.4rem;color:var(--accent-cyan)">0</div>
+          </div>
+        </div>
+
+        <!-- Pending Approval Alert / Section -->
+        <div id="pending-users-container" style="margin-bottom: 1.5rem; display: none;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;background:rgba(245,158,11,0.08);padding:0.6rem 0.85rem;border-radius:var(--radius-sm);border:1px solid rgba(245,158,11,0.25);">
+            <div style="font-size:0.9rem;font-weight:700;color:var(--accent-amber);display:flex;align-items:center;gap:0.4rem;">
+              ⏳ Registrations Awaiting Admin Approval
+            </div>
+            <span class="badge" id="pending-count-badge" style="background:rgba(245,158,11,0.2);color:var(--accent-amber);border:1px solid rgba(245,158,11,0.4)">0 Pending</span>
+          </div>
+          <div id="pending-users-list" style="display:flex;flex-direction:column;gap:0.6rem;"></div>
+        </div>
+
+        <!-- Filter Tabs -->
+        <div class="admin-tabs" style="display:flex;gap:0.4rem;margin-bottom:1rem;flex-wrap:wrap;border-bottom:1px solid var(--border-subtle);padding-bottom:0.75rem;">
+          <button class="btn-admin-tab active" data-tab="all" onclick="setAdminTab('all')">All Users (<span id="tab-cnt-all">0</span>)</button>
+          <button class="btn-admin-tab" data-tab="online" onclick="setAdminTab('online')">🟢 Online Now (<span id="tab-cnt-online">0</span>)</button>
+          <button class="btn-admin-tab" data-tab="pending" onclick="setAdminTab('pending')">⏳ Pending (<span id="tab-cnt-pending">0</span>)</button>
+          <button class="btn-admin-tab" data-tab="managers" onclick="setAdminTab('managers')">👔 Managers (<span id="tab-cnt-managers">0</span>)</button>
+          <button class="btn-admin-tab" data-tab="users" onclick="setAdminTab('users')">👤 Standard Users (<span id="tab-cnt-users">0</span>)</button>
+        </div>
+
+        <!-- Registered & Active Users List -->
+        <div id="all-users-list" style="display:flex;flex-direction:column;gap:0.65rem;">
+          <div class="empty-placeholder">Loading users...</div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- CSV Upload Modal -->
+  <div class="modal-overlay" id="upload-modal">
+    <div class="modal-box">
+      <div class="panel-header" style="margin-bottom:1.25rem"><h3>Upload Leads (CSV)</h3><button class="btn btn-outline btn-sm" onclick="closeModal('upload-modal')">✕</button></div>
+      <form id="form-upload-csv">
+        <div class="form-group"><label class="form-label">CSV File</label><input type="file" id="csv-file-input" accept=".csv" required></div>
+        <div class="form-group"><label class="form-label">Campaign (optional)</label><select id="upload-campaign" class="input-control"><option value="">None</option></select></div>
+        <div class="form-group"><label class="form-label">Assign To (optional)</label><select id="upload-assign" class="input-control"><option value="">Unassigned</option></select></div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1rem">Upload & Import</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Campaign Modal -->
+  <div class="modal-overlay" id="campaign-modal">
+    <div class="modal-box">
+      <div class="panel-header" style="margin-bottom:1.25rem"><h3>Create Campaign</h3><button class="btn btn-outline btn-sm" onclick="closeModal('campaign-modal')">✕</button></div>
+      <form id="form-create-campaign">
+        <div class="form-group"><label class="form-label">Campaign Name</label><input type="text" id="campaign-name" class="input-control" required></div>
+        <div class="form-group"><label class="form-label">Description</label><textarea id="campaign-desc" class="input-control" rows="2"></textarea></div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1rem">Create Campaign</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Lead Detail Modal -->
+  <div class="modal-overlay" id="lead-detail-modal">
+    <div class="modal-box" style="max-width:600px">
+      <div class="panel-header" style="margin-bottom:1.25rem"><h3>Lead Details</h3><button class="btn btn-outline btn-sm" onclick="closeModal('lead-detail-modal')">✕</button></div>
+      <div id="lead-detail-content"></div>
+      <div style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="showReassignModal()">Reassign</button>
+        <button class="btn btn-outline btn-sm" onclick="checkLeadContactHours()">Check Hours</button>
+        <button class="btn btn-sm btn-emerald" onclick="sendWhatsAppFromLead()">📱 WhatsApp</button>
+        <button class="btn btn-sm btn-indigo" id="btn-lead-crm-handoff" onclick="triggerCurrentLeadCrmHandoff()">🚀 Handoff to CRM</button>
+        <button class="btn btn-sm btn-outline" onclick="toggleLeadSuppression('sms')" title="Toggle SMS suppression">🚫 SMS</button>
+        <button class="btn btn-sm btn-outline" onclick="toggleLeadSuppression('whatsapp')" title="Toggle WhatsApp suppression">🚫 WA</button>
+      </div>
+      <div id="contact-hours-result" style="margin-top:0.5rem"></div>
+      <div id="lead-timeline" style="margin-top:1rem;max-height:300px;overflow-y:auto"></div>
+    </div>
+  </div>
+
+  <!-- Reassign Modal -->
+  <div class="modal-overlay" id="reassign-modal">
+    <div class="modal-box" style="max-width:400px">
+      <div class="panel-header" style="margin-bottom:1.25rem"><h3>Reassign Lead</h3><button class="btn btn-outline btn-sm" onclick="closeModal('reassign-modal')">✕</button></div>
+      <div class="form-group"><label class="form-label">Assign To</label><select id="reassign-user-select" class="input-control"><option value="">Select user...</option></select></div>
+      <button class="btn btn-primary" style="width:100%;margin-top:1rem" onclick="submitReassign()">Reassign</button>
+    </div>
+  </div>
+
+  <!-- Template Modal -->
+  <div class="modal-overlay" id="template-modal">
+    <div class="modal-box" style="max-width:550px">
+      <div class="panel-header" style="margin-bottom:1.25rem"><h3>Create Email Template</h3><button class="btn btn-outline btn-sm" onclick="closeModal('template-modal')">✕</button></div>
+      <form id="form-create-template">
+        <div class="form-group"><label class="form-label">Template Name</label><input type="text" id="tpl-name" class="input-control" required></div>
+        <div class="form-group"><label class="form-label">Category</label><select id="tpl-category" class="input-control"><option value="cold-outreach">Cold Outreach</option><option value="follow-up">Follow Up</option><option value="booking">Booking</option><option value="general">General</option></select></div>
+        <div class="form-group"><label class="form-label">Subject</label><input type="text" id="tpl-subject" class="input-control" placeholder="Hello {{first_name}}" required></div>
+        <div class="form-group"><label class="form-label">Body (HTML, use {{field}} for merge)</label><textarea id="tpl-body" class="input-control" rows="8" required style="resize:vertical;min-height:180px"></textarea></div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1rem">Save Template</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- WhatsApp Template Modal -->
+  <div class="modal-overlay" id="wa-template-modal">
+    <div class="modal-box" style="max-width:550px">
+      <div class="panel-header" style="margin-bottom:1.25rem"><h3>Create WhatsApp Template</h3><button class="btn btn-outline btn-sm" onclick="closeModal('wa-template-modal')">✕</button></div>
+      <form id="form-create-wa-template">
+        <div class="form-group"><label class="form-label">Template Name</label><input type="text" id="wa-tpl-name" class="input-control" required></div>
+        <div class="form-group"><label class="form-label">Category</label><select id="wa-tpl-category" class="input-control"><option value="cold-outreach">Cold Outreach</option><option value="follow-up">Follow Up</option><option value="booking">Booking</option><option value="general">General</option></select></div>
+        <div class="form-group"><label class="form-label">Message Body (use {{field}} for merge)</label><textarea id="wa-tpl-body" class="input-control" rows="6" required style="resize:vertical;min-height:140px" placeholder="Hi {{first_name}}, I noticed you work at {{company}}..."></textarea></div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1rem">Save Template</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Profile Settings Modal -->
+  <div class="modal-overlay" id="profile-modal">
+    <div class="modal-box" style="max-width:500px">
+      <div class="panel-header" style="margin-bottom:1.25rem"><h3>Profile & CRM Settings</h3><button class="btn btn-outline btn-sm" onclick="closeModal('profile-modal')">✕</button></div>
+      <form id="form-profile-settings" onsubmit="handleSaveProfile(event)">
+        <div class="form-group">
+          <label class="form-label">Closer Calendar Link</label>
+          <input type="url" id="prof-calendar-link" class="input-control" placeholder="https://calendly.com/your-name">
+          <small style="color:var(--text-muted);font-size:0.75rem">Used when booking meetings with you as a closer.</small>
+        </div>
+        <div class="form-group" style="margin-top:0.75rem">
+          <label class="form-label">CRM Webhook URL</label>
+          <input type="url" id="prof-crm-webhook" class="input-control" placeholder="https://hooks.zapier.com/hooks/catch/...">
+          <small style="color:var(--text-muted);font-size:0.75rem">Endpoint called when handoff to CRM is triggered.</small>
+        </div>
+        <div class="form-group" style="margin-top:0.75rem">
+          <label class="form-label">Timezone</label>
+          <input type="text" id="prof-timezone" class="input-control" placeholder="America/New_York">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1.25rem">Save Profile</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Create Sending Inbox Modal -->
+  <div class="modal-overlay" id="inbox-modal">
+    <div class="modal-box" style="max-width:500px">
+      <div class="panel-header" style="margin-bottom:1.25rem"><h3>Add Sending Inbox</h3><button class="btn btn-outline btn-sm" onclick="closeModal('inbox-modal')">✕</button></div>
+      <form id="form-create-inbox" onsubmit="handleCreateInbox(event)">
+        <div class="form-group"><label class="form-label">Inbox Name / Label</label><input type="text" id="inbox-name" class="input-control" placeholder="Outreach Inbox 1" required></div>
+        <div class="form-group" style="margin-top:0.75rem"><label class="form-label">From Email</label><input type="email" id="inbox-from-email" class="input-control" placeholder="rep@company.com" required></div>
+        <div class="form-group" style="margin-top:0.75rem"><label class="form-label">From Name</label><input type="text" id="inbox-from-name" class="input-control" placeholder="Rep Name"></div>
+        <div class="form-group" style="margin-top:0.75rem"><label class="form-label">Daily Send Limit</label><input type="number" id="inbox-daily-limit" class="input-control" value="50" min="1" max="2000" required></div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1.25rem">Create Inbox</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script src="js/api.js?v=5"></script>
+  <script src="js/dashboard.js?v=5"></script>
+</body>
+</html>
